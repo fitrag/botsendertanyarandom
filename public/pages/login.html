@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — Bot Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={darkMode:'class',theme:{extend:{fontFamily:{sans:['Inter','system-ui','sans-serif']}}}}</script>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script>
+    const t = localStorage.getItem('theme');
+    if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark');
+  </script>
+</head>
+<body class="bg-slate-50 dark:bg-zinc-950 font-sans min-h-screen flex items-center justify-center px-4 transition-colors">
+  <div class="fixed inset-0 bg-gradient-to-br from-violet-100/40 via-transparent to-transparent dark:from-violet-950/20 dark:via-zinc-950 dark:to-zinc-950 pointer-events-none"></div>
+
+  <div class="relative w-full max-w-sm">
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-violet-600 mb-4">
+        <i data-lucide="send" class="w-6 h-6 text-white"></i>
+      </div>
+      <h1 class="text-xl font-bold text-slate-900 dark:text-zinc-100">Bot Admin</h1>
+      <p class="text-sm text-slate-500 dark:text-zinc-500 mt-1">Masuk untuk mengelola bot</p>
+    </div>
+
+    <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm dark:shadow-none">
+      <div id="loginError" class="hidden mb-4 p-3 rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 text-sm"></div>
+      <form id="loginForm" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 dark:text-zinc-400 mb-1.5">Username</label>
+          <input type="text" id="username" required autocomplete="username"
+            class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-sm text-slate-900 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 dark:text-zinc-400 mb-1.5">Password</label>
+          <input type="password" id="password" required autocomplete="current-password"
+            class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-sm text-slate-900 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition">
+        </div>
+        <button type="submit" id="loginBtn"
+          class="w-full py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold rounded-xl transition-colors mt-2">
+          Masuk
+        </button>
+      </form>
+    </div>
+    <p class="text-center text-xs text-slate-400 dark:text-zinc-600 mt-6">Default: admin / admin123</p>
+  </div>
+
+  <script>
+    lucide.createIcons();
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('loginBtn'), err = document.getElementById('loginError');
+      btn.textContent = 'Memproses...'; btn.disabled = true; err.classList.add('hidden');
+      try {
+        const res = await fetch('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: document.getElementById('username').value, password: document.getElementById('password').value }) });
+        const data = await res.json();
+        if (res.ok) window.location.href = '/';
+        else { err.textContent = data.error || 'Login gagal'; err.classList.remove('hidden'); }
+      } catch { err.textContent = 'Koneksi gagal'; err.classList.remove('hidden'); }
+      btn.textContent = 'Masuk'; btn.disabled = false;
+    });
+  </script>
+</body>
+</html>
