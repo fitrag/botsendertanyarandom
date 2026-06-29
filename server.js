@@ -35,6 +35,50 @@ async function main() {
     res.json({ balance, message_cost: messageCost });
   });
 
+  app.get('/api/pakasir/history/:tid', (req, res) => {
+    const history = db.getTopupHistory(req.params.tid);
+    res.json({ history });
+  });
+
+  app.get('/api/pakasir/detail/:order_id', (req, res) => {
+    const tx = db.getTopupDetail(req.params.order_id);
+    if (!tx) return res.status(404).json({ error: 'Transaction not found' });
+    res.json(tx);
+  });
+
+  app.post('/api/pakasir/transfer', async (req, res) => {
+    const { telegram_id, recipient, amount } = req.body;
+    if (!telegram_id || !recipient || !amount) return res.status(400).json({ error: 'Data tidak lengkap' });
+    if (amount < 1000) return res.status(400).json({ error: 'Minimal transfer Rp1.000' });
+
+    const sender = db.getUser(telegram_id);
+    if (!sender) return res.status(404).json({ error: 'Pengirim tidak ditemukan' });
+    if (String(telegram_id) === String(recipient)) return res.status(400).json({ error: 'Tidak bisa kirim ke diri sendiri' });
+
+    const receiver = db.findUser(recipient);
+    if (!receiver) return res.status(404).json({ error: 'Penerima tidak ditemukan. Pastikan ID/username benar.' });
+
+    const balance = db.getUserBalance(telegram_id);
+    if (balance < amount) return res.status(400).json({ error: 'Saldo tidak cukup' });
+
+    const success = db.transferBalance(telegram_id, receiver.telegram_id, amount);
+    if (!success) return res.status(500).json({ error: 'Transfer gagal' });
+
+    const newBalance = db.getUserBalance(telegram_id);
+    res.json({ success: true, newBalance, receiverName: receiver.first_name || receiver.username });
+
+    // Notify receiver via bot
+    try {
+      const bot = require('./bot/bot').getBot();
+      if (bot) {
+        bot.sendMessage(receiver.telegram_id,
+          `💸 *Kamu Menerima Saldo!*\n\n👤 Dari: ${sender.first_name || sender.username || telegram_id}\n💰 Jumlah: *Rp${amount.toLocaleString('id-ID')}*\n\nGunakan /balance untuk cek saldo.`,
+          { parse_mode: 'Markdown' }
+        ).catch(() => {});
+      }
+    } catch(e) {}
+  });
+
   app.get('/api/pakasir/transaction-status/:order_id', async (req, res) => {
     const tx = db.getTopupByOrderId(req.params.order_id);
     if (!tx) return res.status(404).json({ error: 'Transaction not found' });

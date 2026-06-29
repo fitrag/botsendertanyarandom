@@ -37,6 +37,9 @@
         <button data-page="users" class="nav-item group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800/60 transition-colors">
           <i data-lucide="users" class="w-[18px] h-[18px]"></i> Pengguna
         </button>
+        <button data-page="support" class="nav-item group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800/60 transition-colors">
+          <i data-lucide="headphones" class="w-[18px] h-[18px]"></i> Support
+        </button>
         <button data-page="settings" class="nav-item group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800/60 transition-colors">
           <i data-lucide="settings" class="w-[18px] h-[18px]"></i> Pengaturan
         </button>
@@ -199,6 +202,8 @@
             <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/60 rounded-2xl p-5 shadow-sm dark:shadow-none">
               <h3 class="text-sm font-semibold mb-4 flex items-center gap-2"><i data-lucide="credit-card" class="w-4 h-4 text-violet-500"></i> Pembayaran Pakasir</h3>
               <div class="space-y-3">
+                <div class="flex items-center justify-between"><label class="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Top-Up via Bot</label><label class="sw"><input type="checkbox" id="set_topup_bot_enabled"><div class="sw-track"><div class="sw-dot"></div></div></label></div>
+                <div class="flex items-center justify-between"><label class="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Top-Up via Mini App</label><label class="sw"><input type="checkbox" id="set_topup_miniapp_enabled"><div class="sw-track"><div class="sw-dot"></div></div></label></div>
                 <div><label class="block text-[11px] font-medium text-slate-500 dark:text-zinc-400 mb-1">Pakasir Slug (Nama Proyek)</label><input id="set_pakasir_slug" class="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60 rounded-xl text-xs text-slate-800 dark:text-zinc-200 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition" placeholder="slug-proyek-anda"></div>
                 <div><label class="block text-[11px] font-medium text-slate-500 dark:text-zinc-400 mb-1">Pakasir API Key</label><input id="set_pakasir_api_key" type="password" class="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60 rounded-xl text-xs text-slate-800 dark:text-zinc-200 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition" placeholder="api-key-anda"></div>
                 <div class="text-[9px] text-slate-400 dark:text-zinc-600">
@@ -237,6 +242,21 @@
             </div>
           </div>
 </section>
+
+        <!-- SUPPORT -->
+        <section id="supportPage" class="page space-y-5">
+          <div class="flex items-center gap-3 mb-2">
+            <h2 class="text-base font-bold">📞 Support Tickets</h2>
+            <div class="flex gap-1.5">
+              <button onclick="supFilter='';  supPage=1;loadSupport()" class="sup-tab px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors border border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800">Semua</button>
+              <button onclick="supFilter='open'; supPage=1;loadSupport()" class="sup-tab px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors border border-amber-300 dark:border-amber-600 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10">Open</button>
+              <button onclick="supFilter='replied';supPage=1;loadSupport()" class="sup-tab px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors border border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800">Replied</button>
+              <button onclick="supFilter='closed'; supPage=1;loadSupport()" class="sup-tab px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors border border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800">Closed</button>
+            </div>
+          </div>
+          <div class="space-y-3" id="supportList"></div>
+          <div id="supPagination" class="flex items-center justify-center gap-1.5 pt-2"></div>
+        </section>
 
       </div>
     </main>

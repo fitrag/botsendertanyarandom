@@ -5,6 +5,8 @@ let bot;
 const rateLimitMap = new Map();
 const writeMode = new Set();
 const lastBotMsg = new Map();
+const supportState = new Map();
+const supportReplyFor = new Map();
 
 function initBot(token) {
   bot = new TelegramBot(token, { polling: true });
@@ -112,8 +114,8 @@ function initBot(token) {
           inline_keyboard: [
             [{ text: '✏️ Kirim Pesan', callback_data: 'menu_write' }],
             [{ text: '💰 Cek Saldo', callback_data: 'menu_balance' }, { text: '📋 Status Kiriman', callback_data: 'check_status' }],
-            [{ text: '🔗 Referral', callback_data: 'menu_referral' }, { text: '💳 Top-Up', callback_data: 'menu_topup' }],
-            [{ text: '❓ Bantuan', callback_data: 'show_help' }]
+[{ text: '🔗 Referral', callback_data: 'menu_referral' }, { text: '💳 Top-Up', callback_data: 'menu_topup' }],
+            [{ text: '❓ Bantuan', callback_data: 'show_help' }, { text: '📞 Support', callback_data: 'menu_support' }]
           ]
         }
       }
@@ -253,30 +255,66 @@ function initBot(token) {
         );
         setTimeout(() => showMainMenu(chatId), 600);
       }
-    } else if (data === 'menu_topup') {
+} else if (data === 'menu_topup') {
       const slug = db.getSetting('pakasir_slug');
-      if (!slug) {
-        bot.sendMessage(chatId, `💳 Top-up belum dikonfigurasi.\n\nHubungi admin untuk top-up.`, { parse_mode: 'Markdown' });
+      const miniappEnabled = db.getSetting('topup_miniapp_enabled') !== 'false';
+      if (!slug || !miniappEnabled) {
+        const refEnabled = db.getSetting('referral_enabled') === 'true';
+        const botInfo = await bot.getMe();
+        const refLink = `https://t.me/${botInfo.username}?start=ref_${query.from.id}`;
+        let msg = `💳 *Top-Up Saldo*\n\n` + (!miniappEnabled ? `Fitur top-up via aplikasi sedang dinonaktifkan.\n\n` : `Fitur top-up online belum dikonfigurasi.\n\n`);
+        if (refEnabled) {
+          msg += `🎁 *Dapatkan saldo lewat Referral!*\nAjak teman bergabung dan dapatkan saldo.\n\n📎 Link:\n\`${refLink}\``;
+        } else {
+          msg += `📲 Hubungi admin untuk top-up manual.`;
+        }
+        bot.sendMessage(chatId, msg, { parse_mode: 'Markdown' });
+        setTimeout(() => showMainMenu(chatId), 600);
       } else {
         const miniAppUrl = process.env.WEBAPP_URL || '';
+        const botTopup = db.getSetting('topup_bot_enabled') !== 'false';
         const keyboard = [];
         if (miniAppUrl) keyboard.push([{ text: '📱 Buka Aplikasi Top-Up', web_app: { url: miniAppUrl + '/topup' } }]);
-        keyboard.push(
-          [{ text: '💰 Rp10.000', callback_data: 'topup_10000' }],
-          [{ text: '💰 Rp25.000', callback_data: 'topup_25000' }],
-          [{ text: '💰 Rp50.000', callback_data: 'topup_50000' }],
-          [{ text: '💰 Rp100.000', callback_data: 'topup_100000' }],
-          [{ text: '« Kembali', callback_data: 'menu_back' }]
-        );
-        sendClean(chatId,
-          `💳 *Top-Up Saldo*\n\nPilih nominal atau ketik /topup <jumlah>`,
-          {
-            parse_mode: 'Markdown',
-            reply_markup: { inline_keyboard: keyboard }
-          }
-        );
+        if (botTopup) {
+          keyboard.push(
+            [{ text: '💰 Rp10.000', callback_data: 'topup_10000' }],
+            [{ text: '💰 Rp25.000', callback_data: 'topup_25000' }],
+            [{ text: '💰 Rp50.000', callback_data: 'topup_50000' }],
+            [{ text: '💰 Rp100.000', callback_data: 'topup_100000' }]
+          );
+        }
+        keyboard.push([{ text: '« Kembali', callback_data: 'menu_back' }]);
+        const msgText = botTopup ? `💳 *Top-Up Saldo*\n\nPilih nominal atau ketik /topup <jumlah>` : `💳 *Top-Up Saldo*\n\n📱 Gunakan aplikasi top-up untuk isi saldo.`;
+        sendClean(chatId, msgText, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: keyboard } });
       }
-    } else if (data === 'menu_back') {
+} else if (data === 'menu_back') {
+      showMainMenu(chatId);
+    } else if (data === 'menu_support') {
+      supportState.set(fromId, { step: 'subject' });
+      sendClean(chatId,
+        `📞 *Support / Bantuan*\n\nSilakan tulis judul/subjek masalah kamu.\n\n_Contoh: "Saldo tidak masuk" atau "Pesan tidak terkirim"_`,
+        { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'support_cancel' }]] } }
+      );
+    } else if (data === 'support_cancel') {
+      supportState.delete(fromId);
+      showMainMenu(chatId);
+    } else if (data.startsWith('support_reply_')) {
+      const ticketId = parseInt(data.replace('support_reply_', ''));
+      const ticket = db.getSupportTicket(ticketId);
+      if (!ticket || ticket.status === 'closed') {
+        bot.sendMessage(chatId, '❌ Tiket sudah ditutup.', { parse_mode: 'Markdown' });
+        return;
+      }
+      supportReplyFor.set(fromId, ticketId);
+      bot.sendMessage(chatId,
+        `💬 *Balas Tiket #SUP${ticketId}*\n\nTulis balasan kamu:\n\n📌 Ketik *batal* untuk keluar.`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'support_reply_cancel' }]] }
+        }
+      );
+    } else if (data === 'support_reply_cancel') {
+      supportReplyFor.delete(fromId);
       showMainMenu(chatId);
     }
   });
@@ -325,6 +363,12 @@ function initBot(token) {
         }, 600);
       } else if (cmd === '/help') {
         sendHelp(chatId);
+      } else if (cmd === '/support') {
+        supportState.set(String(from.id), { step: 'subject' });
+        sendClean(chatId,
+          `📞 *Support / Bantuan*\n\nSilakan tulis judul/subjek masalah kamu.\n\n_Contoh: "Saldo tidak masuk" atau "Pesan tidak terkirim"_`,
+          { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'support_cancel' }]] } }
+        );
       } else if (cmd === '/status') {
         sendStatus(chatId, from.id);
       } else if (cmd === '/menu') {
@@ -363,8 +407,20 @@ function initBot(token) {
         );
       } else if (cmd === '/topup') {
         const slug = db.getSetting('pakasir_slug');
-        if (!slug) {
-          bot.sendMessage(chatId, `💳 *Top-Up Saldo*\n\nFitur top-up online belum dikonfigurasi oleh admin.\n\n📲 Silakan hubungi admin untuk top-up manual.`, { parse_mode: 'Markdown' });
+        const miniappEnabled = db.getSetting('topup_miniapp_enabled') !== 'false';
+        if (!slug || !miniappEnabled) {
+          // Show referral as alternative
+          const refEnabled = db.getSetting('referral_enabled') === 'true';
+          const botInfo = await bot.getMe();
+          const refLink = `https://t.me/${botInfo.username}?start=ref_${from.id}`;
+          let msg = `💳 *Top-Up Saldo*\n\n` + (!miniappEnabled ? `Fitur top-up via aplikasi sedang dinonaktifkan.\n\n` : `Fitur top-up online belum dikonfigurasi.\n\n`);
+          if (refEnabled) {
+            msg += `🎁 *Dapatkan saldo lewat Referral!*\nAjak teman bergabung dan dapatkan saldo gratis.\n\n📎 Link referralmu:\n\`${refLink}\``;
+            bot.sendMessage(chatId, msg, { parse_mode: 'Markdown' });
+          } else {
+            msg += `📲 Silakan hubungi admin untuk top-up manual.`;
+            bot.sendMessage(chatId, msg, { parse_mode: 'Markdown' });
+          }
         } else {
           const args2 = msg.text.split(' ');
           if (args2[1] && /^\d+$/.test(args2[1]) && parseInt(args2[1]) >= 1000) {
@@ -372,24 +428,25 @@ function initBot(token) {
             createTopupPayment(chatId, from.id, customAmount, slug);
           } else {
             const miniAppUrl = process.env.WEBAPP_URL || '';
+            const botTopup = db.getSetting('topup_bot_enabled') !== 'false';
             const keyboard = [];
             if (miniAppUrl) keyboard.push([{ text: '📱 Buka Aplikasi Top-Up', web_app: { url: miniAppUrl + '/topup' } }]);
-            keyboard.push(
-              [{ text: '💰 Rp10.000', callback_data: 'topup_10000' }],
-              [{ text: '💰 Rp25.000', callback_data: 'topup_25000' }],
-              [{ text: '💰 Rp50.000', callback_data: 'topup_50000' }],
-              [{ text: '💰 Rp100.000', callback_data: 'topup_100000' }]
-            );
-            sendClean(chatId,
-              `💳 *Top-Up Saldo via Pakasir*\n\n` +
-              (miniAppUrl ? `📱 *Rekomendasi:* Gunakan aplikasi top-up untuk pengalaman lebih baik!\n\n` : '') +
-              `Pilih nominal top-up:\n\n` +
-              `Atau ketik \`/topup <jumlah>\` untuk nominal custom.\n_Contoh: /topup 15000_`,
-              {
-                parse_mode: 'Markdown',
-                reply_markup: { inline_keyboard: keyboard }
-              }
-            );
+            if (botTopup) {
+              keyboard.push(
+                [{ text: '💰 Rp10.000', callback_data: 'topup_10000' }],
+                [{ text: '💰 Rp25.000', callback_data: 'topup_25000' }],
+                [{ text: '💰 Rp50.000', callback_data: 'topup_50000' }],
+                [{ text: '💰 Rp100.000', callback_data: 'topup_100000' }]
+              );
+            }
+            const msgText = !miniAppUrl ? `💳 *Top-Up Saldo via Pakasir*\n\nTop-up hanya tersedia lewat Mini App.\n\n📱 Silakan buka aplikasi top-up kami.` :
+              !botTopup ? `💳 *Top-Up Saldo via Pakasir*\n\n📱 Gunakan aplikasi top-up untuk isi saldo.` :
+              `💳 *Top-Up Saldo via Pakasir*\n\n📱 *Rekomendasi:* Gunakan aplikasi top-up!\n\nPilih nominal top-up:\n\nAtau ketik \`/topup <jumlah>\` untuk nominal custom.\n_Contoh: /topup 15000_`;
+            if (keyboard.length) {
+              sendClean(chatId, msgText, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: keyboard } });
+            } else {
+              bot.sendMessage(chatId, `💳 *Top-Up Saldo*\n\nTop-up hanya tersedia lewat Mini App.\n\n📱 Silakan tanya admin untuk info lebih lanjut.`, { parse_mode: 'Markdown' });
+            }
           }
         }
       } else if (cmd === '/kirim') {
@@ -452,6 +509,81 @@ function initBot(token) {
     // ── TEXT (write mode or /kirim) ──
     if (msg.text) {
       const text = msg._kirimText || msg.text;
+
+      // ── SUPPORT FLOW ──
+      if (msg._kirimText) msg._kirimText = undefined;
+      const supState = supportState.get(String(from.id));
+      const replyTicketId = supportReplyFor.get(String(from.id));
+
+      // ── SUPPORT REPLY FLOW ──
+      if (replyTicketId && !msg.text.startsWith('/')) {
+        const input = text.trim();
+        if (input.toLowerCase() === 'batal') {
+          supportReplyFor.delete(String(from.id));
+          showMainMenu(chatId);
+          return;
+        }
+        if (input.length < 3) {
+          bot.sendMessage(chatId, '⚠️ Balasan terlalu pendek.', { parse_mode: 'Markdown' });
+          return;
+        }
+        supportReplyFor.delete(String(from.id));
+        db.addSupportMessage(replyTicketId, 'user', input);
+        const ticket = db.getSupportTicket(replyTicketId);
+        bot.sendMessage(chatId,
+          `✅ *Balasan Terkirim!*\n\nTiket #SUP${replyTicketId}: _${ticket ? ticket.subject : ''}_\n\nAdmin akan segera merespon.`,
+          { parse_mode: 'Markdown' }
+        );
+        const adminId = process.env.ADMIN_TELEGRAM_ID;
+        if (adminId) {
+          const userName = from.first_name || from.username || String(from.id);
+          bot.sendMessage(adminId,
+            `💬 *Balasan User — #SUP${replyTicketId}*\n\n👤 Dari: ${userName}\n\n${input.substring(0, 300)}${input.length > 300 ? '...' : ''}\n\n_Buka dashboard untuk merespon._`,
+            { parse_mode: 'Markdown' }
+          ).catch(() => {});
+        }
+        setTimeout(() => showMainMenu(chatId), 800);
+        return;
+      }
+
+      // ── SUPPORT CREATE FLOW ──
+      if (supState && !msg.text.startsWith('/')) {
+        const input = text.trim();
+        if (supState.step === 'subject') {
+          if (input.length < 3) {
+            bot.sendMessage(chatId, '⚠️ Subjek terlalu pendek. Minimal 3 karakter.', { parse_mode: 'Markdown' });
+            return;
+          }
+          supportState.set(String(from.id), { step: 'message', subject: input });
+          bot.sendMessage(chatId,
+            `📞 *Support*\n\nSubjek: _${input}_\n\nSekarang tulis pesan / detail masalah kamu.\n\n📌 Ketik *batal* untuk keluar.`,
+            { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'support_cancel' }]] } }
+          );
+          return;
+        } else if (supState.step === 'message') {
+          if (input.length < 5) {
+            bot.sendMessage(chatId, '⚠️ Pesan terlalu pendek. Minimal 5 karakter.', { parse_mode: 'Markdown' });
+            return;
+          }
+          const userName = from.first_name || from.username || String(from.id);
+          const ticketId = db.createSupportTicket(from.id, userName, supState.subject, input);
+          supportState.delete(String(from.id));
+          bot.sendMessage(chatId,
+            `✅ *Tiket Support Terkirim!*\n\n🔢 ID: \`#SUP${ticketId}\`\n📋 Subjek: _${supState.subject}_\n\nAdmin kami akan segera merespon.\nKamu akan dihubungi lewat Telegram.`,
+            { parse_mode: 'Markdown' }
+          );
+          // Notify admin
+          const adminId = process.env.ADMIN_TELEGRAM_ID;
+          if (adminId) {
+            bot.sendMessage(adminId,
+              `📞 *Tiket Support Baru!*\n\n🔢 ID: \`#SUP${ticketId}\`\n👤 Dari: ${userName}\n📋 Subjek: ${supState.subject}\n💬 Pesan: ${input.substring(0, 200)}${input.length > 200 ? '...' : ''}\n\n_Buka dashboard untuk merespon._`,
+              { parse_mode: 'Markdown' }
+            ).catch(() => {});
+          }
+          setTimeout(() => showMainMenu(chatId), 800);
+          return;
+        }
+      }
 
       // "batal" to exit write mode
       if (inWriteMode && !msg._kirimText && text.trim().toLowerCase() === 'batal') {

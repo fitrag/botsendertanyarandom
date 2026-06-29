@@ -131,6 +131,36 @@ async function initDb() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS support_tickets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id TEXT NOT NULL,
+    user_name TEXT,
+    subject TEXT,
+    message TEXT NOT NULL,
+    status TEXT DEFAULT 'open',
+    admin_reply TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS support_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticket_id INTEGER NOT NULL,
+    sender TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (ticket_id) REFERENCES support_tickets(id) ON DELETE CASCADE
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS balance_transfers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sender_tg_id TEXT NOT NULL,
+    receiver_tg_id TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    note TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
   try { db.run('CREATE INDEX IF NOT EXISTS idx_msg_status ON messages(status)'); } catch(e) {}
   try { db.run('CREATE INDEX IF NOT EXISTS idx_msg_uid ON messages(user_id)'); } catch(e) {}
   try { db.run('CREATE INDEX IF NOT EXISTS idx_msg_created ON messages(created_at)'); } catch(e) {}
@@ -158,6 +188,8 @@ async function initDb() {
     referral_min_referrals: '1',
     paid_message_enabled: 'false',
     message_cost: '5000',
+    topup_bot_enabled: 'true',
+    topup_miniapp_enabled: 'true',
     pakasir_slug: '',
     pakasir_api_key: ''
   };
@@ -201,6 +233,21 @@ module.exports = {
 
   getUserById(id) {
     return getOne(db.exec('SELECT * FROM users WHERE id = ?', [Number(id)]));
+  },
+
+  findUser(query) {
+    return getOne(db.exec('SELECT * FROM users WHERE telegram_id = ? OR username = ?', [String(query), String(query)]));
+  },
+
+  transferBalance(senderTgId, receiverTgId, amount) {
+    const senderBalance = this.getUserBalance(senderTgId);
+    if (senderBalance < amount) return null;
+    db.run('UPDATE users SET balance = COALESCE(balance, 0) - ? WHERE telegram_id = ?', [amount, String(senderTgId)]);
+    db.run('UPDATE users SET balance = COALESCE(balance, 0) + ? WHERE telegram_id = ?', [amount, String(receiverTgId)]);
+    db.run('INSERT INTO balance_transfers (sender_tg_id, receiver_tg_id, amount) VALUES (?, ?, ?)',
+      [String(senderTgId), String(receiverTgId), amount]);
+    saveDb();
+    return true;
   },
 
   createOrUpdateUser(tgId, username, firstName, lastName) {
@@ -349,8 +396,71 @@ module.exports = {
     return this.getTopupByOrderId(orderId);
   },
 
-  cancelTopupTransaction(orderId) {
+cancelTopupTransaction(orderId) {
     db.run("UPDATE topup_transactions SET status = 'cancelled' WHERE order_id = ?", [orderId]);
+    saveDb();
+  },
+
+  getTopupHistory(tgId, limit = 20) {
+    return getRows(db.exec('SELECT id, order_id, amount, status, payment_method, created_at, completed_at FROM topup_transactions WHERE telegram_id = ? ORDER BY created_at DESC LIMIT ?', [String(tgId), limit]));
+  },
+
+  getTopupDetail(orderId) {
+    return getOne(db.exec('SELECT id, order_id, telegram_id, amount, status, payment_method, completed_at, created_at FROM topup_transactions WHERE order_id = ?', [orderId]));
+  },
+
+  createSupportTicket(tgId, userName, subject, message) {
+    db.run('INSERT INTO support_tickets (telegram_id, user_name, subject, message) VALUES (?, ?, ?, ?)',
+      [String(tgId), userName, subject, message]);
+    const result = db.exec('SELECT last_insert_rowid() as id');
+    const ticketId = result[0].values[0][0];
+    db.run('INSERT INTO support_messages (ticket_id, sender, message) VALUES (?, ?, ?)', [ticketId, 'user', message]);
+    saveDb();
+    return ticketId;
+  },
+
+  getOpenTicketByUser(tgId) {
+    return getOne(db.exec("SELECT * FROM support_tickets WHERE telegram_id = ? AND status != 'closed' ORDER BY created_at DESC LIMIT 1", [String(tgId)]));
+  },
+
+  getSupportMessages(ticketId) {
+    return getRows(db.exec('SELECT * FROM support_messages WHERE ticket_id = ? ORDER BY created_at ASC', [Number(ticketId)]));
+  },
+
+  addSupportMessage(ticketId, sender, message) {
+    db.run('INSERT INTO support_messages (ticket_id, sender, message) VALUES (?, ?, ?)', [Number(ticketId), sender, message]);
+    db.run('UPDATE support_tickets SET updated_at = CURRENT_TIMESTAMP WHERE id = ?', [Number(ticketId)]);
+    saveDb();
+  },
+
+  replySupportTicket(id, reply) {
+    this.addSupportMessage(id, 'admin', reply);
+    db.run("UPDATE support_tickets SET admin_reply = ?, status = 'replied', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [reply, Number(id)]);
+    saveDb();
+  },
+
+  getSupportTickets(page = 1, limit = 20, status = '') {
+    let q = 'SELECT * FROM support_tickets';
+    let cq = 'SELECT COUNT(*) FROM support_tickets';
+    const p = [];
+    if (status) { q += ' WHERE status = ?'; cq += ' WHERE status = ?'; p.push(status); }
+    const total = getCount(db.exec(cq, [...p]));
+    q += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    p.push(limit, (page - 1) * limit);
+    return { tickets: getRows(db.exec(q, p)), total, page, limit, totalPages: Math.ceil(total / limit) };
+  },
+
+  getSupportTicket(id) {
+    return getOne(db.exec('SELECT * FROM support_tickets WHERE id = ?', [Number(id)]));
+  },
+
+  replySupportTicket(id, reply) {
+    db.run("UPDATE support_tickets SET admin_reply = ?, status = 'replied', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [reply, Number(id)]);
+    saveDb();
+  },
+
+  closeSupportTicket(id) {
+    db.run("UPDATE support_tickets SET status = 'closed', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [Number(id)]);
     saveDb();
   },
 

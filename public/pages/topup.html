@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Top-Up Saldo</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.400.0/dist/umd/lucide.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -69,7 +70,7 @@
     .payment-card {
       background: var(--tg-theme-secondary-bg-color, #f2f2f7); border-radius: 18px; padding: 22px; margin-top: 20px;
     }
-    .payment-card .method-label { font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: .5px; color: var(--tg-theme-hint-color, #8e8e93); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .payment-card .method-label { font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: .5px; color: var(--tg-theme-hint-color, #8e8e93); margin-bottom: 8px; }
     .payment-card .total { font-size: 28px; font-weight: 800; margin-bottom: 16px; letter-spacing: -0.5px; }
 
     .qr-wrapper { display: flex; justify-content: center; margin: 16px 0; }
@@ -88,16 +89,36 @@
       cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px;
     }
 
-    svg.icon-16 { width: 16px; height: 16px; flex-shrink: 0; }
-    svg.icon-13 { width: 13px; height: 13px; flex-shrink: 0; }
-    svg.icon-42 { width: 42px; height: 42px; flex-shrink: 0; color: #fff; }
+    .lucide { width: 16px; height: 16px; flex-shrink: 0; }
+    .lucide-sm { width: 13px; height: 13px; flex-shrink: 0; }
+    .lucide-lg { width: 20px; height: 20px; flex-shrink: 0; }
+    .lucide-xl { width: 42px; height: 42px; flex-shrink: 0; color: #fff; }
+
+    .tabs { display: flex; gap: 0; margin-bottom: 20px; background: var(--tg-theme-secondary-bg-color, #f2f2f7); border-radius: 12px; padding: 3px; }
+    .tab-btn { flex: 1; padding: 10px; border-radius: 10px; border: none; background: transparent; font-size: 13px; font-weight: 600; color: var(--tg-theme-hint-color, #8e8e93); cursor: pointer; transition: all .15s; }
+    .tab-btn.active { background: #fff; color: #8b5cf6; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+
+    .tx-item { background: var(--tg-theme-secondary-bg-color, #f2f2f7); border-radius: 14px; padding: 14px 16px; margin-bottom: 8px; cursor: pointer; transition: opacity .15s; }
+    .tx-item:active { opacity: .7; }
+    .tx-row { display: flex; justify-content: space-between; align-items: center; }
+    .tx-amount { font-size: 16px; font-weight: 700; }
+    .tx-status { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 8px; }
+    .tx-status.completed { background: #d1fae5; color: #059669; }
+    .tx-status.pending { background: #fef3c7; color: #d97706; }
+    .tx-status.cancelled { background: #fee2e2; color: #dc2626; }
+    .tx-meta { font-size: 11px; color: var(--tg-theme-hint-color, #8e8e93); margin-top: 4px; display: flex; justify-content: space-between; }
+
+    .detail-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--tg-theme-secondary-bg-color, #e8e8ed); }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-label { font-size: 12px; color: var(--tg-theme-hint-color, #8e8e93); }
+    .detail-value { font-size: 13px; font-weight: 600; text-align: right; }
   </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
     <h1>
-      <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      <i data-lucide="zap" class="lucide"></i>
       Top-Up Saldo
     </h1>
     <p>Isi saldo untuk kirim pesan anonim</p>
@@ -109,80 +130,117 @@
     <div class="hint" id="balanceEstimate"></div>
   </div>
 
-  <div id="formStep">
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('topup')">Top-Up</button>
+    <button class="tab-btn" onclick="switchTab('send')">Kirim</button>
+    <button class="tab-btn" onclick="switchTab('history')">Riwayat</button>
+  </div>
+
+  <div id="tabTopup">
+    <div id="formStep">
+      <div class="section">
+        <div class="section-title">Nominal Top-Up</div>
+        <div class="amount-grid" id="amountGrid">
+          <button class="amount-btn" data-amount="10000">Rp10K</button>
+          <button class="amount-btn" data-amount="25000">Rp25K</button>
+          <button class="amount-btn" data-amount="50000">Rp50K</button>
+          <button class="amount-btn" data-amount="100000">Rp100K</button>
+          <button class="amount-btn" data-amount="150000">Rp150K</button>
+          <button class="amount-btn" data-amount="200000">Rp200K</button>
+        </div>
+        <input type="number" class="custom-input" id="customAmount" placeholder="Atau masukkan nominal custom..." min="1000" inputmode="numeric">
+      </div>
+
+      <div class="section">
+        <div class="section-title">Metode Pembayaran</div>
+        <div class="method-list" id="methodList">
+          <button class="method-btn selected" data-method="qris">
+            <i data-lucide="qr-code" class="lucide"></i> QRIS
+          </button>
+        </div>
+      </div>
+
+      <button class="primary-btn" id="payBtn">
+        <span id="payBtnText">Lanjutkan Pembayaran</span>
+      </button>
+      <div class="error-msg hidden" id="errorMsg"></div>
+    </div>
+
+    <div id="paymentStep" class="hidden">
+      <div class="payment-card">
+        <div class="method-label" id="paymentMethodLabel">Pembayaran</div>
+        <div class="total" id="paymentTotal"></div>
+        <div class="qr-wrapper" id="qrWrapper">
+          <img id="qrImage" src="" alt="QR Code">
+        </div>
+        <div class="expiry" id="expiryInfo"></div>
+      </div>
+      <button class="primary-btn" style="margin-top:16px; background: var(--tg-theme-secondary-bg-color, #f2f2f7); color: var(--tg-theme-text-color, #1a1a2e); box-shadow:none;" onclick="resetForm()">
+        <i data-lucide="arrow-left" class="lucide"></i> Top-Up Lagi
+      </button>
+      <button class="btn-secondary" id="cancelBtn" onclick="cancelPayment()">
+        <i data-lucide="x-circle" class="lucide"></i> Batalkan
+      </button>
+    </div>
+
+    <div id="successStep" class="hidden">
+      <div class="payment-card" style="text-align: center;">
+        <div style="width: 72px; height: 72px; border-radius: 50%; background: linear-gradient(135deg, #10b981, #34d399); margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
+          <i data-lucide="check-circle" class="lucide-xl"></i>
+        </div>
+        <div style="font-size: 22px; font-weight: 800; margin-bottom: 4px;">Pembayaran Berhasil!</div>
+        <div style="font-size: 13px; color: var(--tg-theme-hint-color, #8e8e93); margin-bottom: 16px;">Saldo otomatis bertambah</div>
+        <div style="font-size: 28px; font-weight: 800; color: #8b5cf6;" id="successAmount">Rp0</div>
+      </div>
+      <button class="primary-btn" style="margin-top:16px;" onclick="resetForm()">
+        <i data-lucide="arrow-left" class="lucide"></i> Top-Up Lagi
+      </button>
+      <button class="primary-btn" style="margin-top:8px; background: var(--tg-theme-secondary-bg-color, #f2f2f7); color: var(--tg-theme-text-color, #1a1a2e); box-shadow:none;" onclick="if(tg)tg.close()">Tutup</button>
+    </div>
+
+    <div id="pendingStep" class="hidden">
+      <div class="payment-card" style="text-align: center;">
+        <div class="spinner" style="border-color: rgba(139,92,246,.2); border-top-color: #8b5cf6; width: 48px; height: 48px; margin: 20px auto;"></div>
+        <div style="font-size: 14px; font-weight: 600; color: var(--tg-theme-hint-color, #8e8e93);">Menunggu pembayaran...</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tabHistory" class="hidden">
+    <div id="historyList"></div>
+  </div>
+
+  <div id="tabSend" class="hidden">
     <div class="section">
-      <div class="section-title">Nominal Top-Up</div>
-      <div class="amount-grid" id="amountGrid">
-        <button class="amount-btn" data-amount="10000">Rp10K</button>
-        <button class="amount-btn" data-amount="25000">Rp25K</button>
-        <button class="amount-btn" data-amount="50000">Rp50K</button>
-        <button class="amount-btn" data-amount="100000">Rp100K</button>
-        <button class="amount-btn" data-amount="150000">Rp150K</button>
-        <button class="amount-btn" data-amount="200000">Rp200K</button>
+      <div class="section-title">Kirim Saldo ke Pengguna Lain</div>
+      <input type="text" class="custom-input" id="sendRecipient" placeholder="Telegram ID atau @username penerima..." style="margin-top:0;">
+      <input type="number" class="custom-input" id="sendAmount" placeholder="Jumlah saldo (min Rp1.000)..." min="1000" inputmode="numeric">
+      <div class="amount-grid" style="margin-top:8px;">
+        <button class="amount-btn send-amt" data-amount="5000">Rp5K</button>
+        <button class="amount-btn send-amt" data-amount="10000">Rp10K</button>
+        <button class="amount-btn send-amt" data-amount="25000">Rp25K</button>
+        <button class="amount-btn send-amt" data-amount="50000">Rp50K</button>
+        <button class="amount-btn send-amt" data-amount="100000">Rp100K</button>
       </div>
-      <input type="number" class="custom-input" id="customAmount" placeholder="Atau masukkan nominal custom..." min="1000" inputmode="numeric">
+      <div class="error-msg hidden" id="sendError"></div>
     </div>
-
-    <div class="section">
-      <div class="section-title">Metode Pembayaran</div>
-      <div class="method-list" id="methodList">
-        <button class="method-btn selected" data-method="qris">
-          <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/><rect x="2" y="14" width="8" height="8" rx="1"/><line x1="14" y1="18" x2="14" y2="14"/><line x1="18" y1="18" x2="14" y2="14"/><line x1="14" y1="14" x2="18" y2="14"/><line x1="14" y1="22" x2="14" y2="18"/></svg>
-          QRIS
-        </button>
-      </div>
-    </div>
-
-    <button class="primary-btn" id="payBtn">
-      <span id="payBtnText">Lanjutkan Pembayaran</span>
-    </button>
-    <div class="error-msg hidden" id="errorMsg"></div>
-  </div>
-
-  <div id="paymentStep" class="hidden">
-    <div class="payment-card">
-      <div class="method-label" id="paymentMethodLabel">Pembayaran</div>
-      <div class="total" id="paymentTotal"></div>
-      <div class="qr-wrapper" id="qrWrapper">
-        <img id="qrImage" src="" alt="QR Code">
-      </div>
-      <div class="expiry" id="expiryInfo"></div>
-    </div>
-    <button class="primary-btn" style="margin-top:16px; background: var(--tg-theme-secondary-bg-color, #f2f2f7); color: var(--tg-theme-text-color, #1a1a2e); box-shadow:none;" onclick="resetForm()">
-      <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-      Top-Up Lagi
-    </button>
-    <button class="btn-secondary" id="cancelBtn" onclick="cancelPayment()">
-      <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-      Batalkan
+    <button class="primary-btn" id="sendBtn" onclick="sendBalance()">
+      <i data-lucide="send" class="lucide"></i> <span id="sendBtnText">Kirim Saldo</span>
     </button>
   </div>
 
-  <div id="successStep" class="hidden">
-    <div class="payment-card" style="text-align: center;">
-      <div style="width: 72px; height: 72px; border-radius: 50%; background: linear-gradient(135deg, #10b981, #34d399); margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
-        <svg class="icon-42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-      </div>
-      <div style="font-size: 22px; font-weight: 800; margin-bottom: 4px;">Pembayaran Berhasil!</div>
-      <div style="font-size: 13px; color: var(--tg-theme-hint-color, #8e8e93); margin-bottom: 16px;">Saldo otomatis bertambah</div>
-      <div style="font-size: 28px; font-weight: 800; color: #8b5cf6;" id="successAmount">Rp0</div>
-    </div>
-    <button class="primary-btn" style="margin-top:16px;" onclick="resetForm()">
-      <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-      Top-Up Lagi
+  <div id="tabDetail" class="hidden">
+    <button class="primary-btn" style="margin-top:0; margin-bottom:16px; background: var(--tg-theme-secondary-bg-color, #f2f2f7); color: var(--tg-theme-text-color, #1a1a2e); box-shadow:none;" onclick="switchTab('history')">
+      <i data-lucide="arrow-left" class="lucide"></i> Kembali
     </button>
-    <button class="primary-btn" style="margin-top:8px; background: var(--tg-theme-secondary-bg-color, #f2f2f7); color: var(--tg-theme-text-color, #1a1a2e); box-shadow:none;" onclick="if(tg)tg.close()">Tutup</button>
-  </div>
-
-  <div id="pendingStep" class="hidden">
-    <div class="payment-card" style="text-align: center;">
-      <div class="spinner" style="border-color: rgba(139,92,246,.2); border-top-color: #8b5cf6; width: 48px; height: 48px; margin: 20px auto;"></div>
-      <div style="font-size: 14px; font-weight: 600; color: var(--tg-theme-hint-color, #8e8e93);">Menunggu pembayaran...</div>
-    </div>
+    <div class="payment-card" id="detailContent"></div>
   </div>
 </div>
 
 <script>
+function refreshIcons() { if (window.lucide) lucide.createIcons(); }
+document.addEventListener('DOMContentLoaded', () => setTimeout(refreshIcons, 100));
+
 const tg = window.Telegram?.WebApp;
 let tgUser = null;
 let selectedAmount = 0;
@@ -227,10 +285,7 @@ document.getElementById('customAmount').addEventListener('input', e => {
 document.getElementById('payBtn').addEventListener('click', async () => {
   const customVal = parseInt(document.getElementById('customAmount').value);
   if (customVal >= 1000) selectedAmount = customVal;
-  if (!selectedAmount || selectedAmount < 1000) {
-    showError('Pilih nominal minimal Rp1.000');
-    return;
-  }
+  if (!selectedAmount || selectedAmount < 1000) { showError('Pilih nominal minimal Rp1.000'); return; }
 
   const tid = tgUser?.id || new URLSearchParams(window.location.search).get('tid');
   if (!tid) { showError('Tidak dapat membaca identitas pengguna'); return; }
@@ -242,8 +297,7 @@ document.getElementById('payBtn').addEventListener('click', async () => {
 
   try {
     const res = await fetch('/api/pakasir/create-transaction', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ amount: selectedAmount, method: selectedMethod, telegram_id: String(tid) })
     });
     const data = await res.json();
@@ -251,16 +305,14 @@ document.getElementById('payBtn').addEventListener('click', async () => {
 
     document.getElementById('formStep').classList.add('hidden');
     document.getElementById('paymentStep').classList.remove('hidden');
-
     document.getElementById('paymentTotal').textContent = 'Rp' + data.total_payment.toLocaleString('id-ID');
     document.getElementById('paymentMethodLabel').textContent = 'QRIS';
     document.getElementById('qrImage').src = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(data.payment_number);
-
     if (data.expired_at) {
       const exp = new Date(data.expired_at).toLocaleString('id-ID', { hour:'2-digit', minute:'2-digit', day:'numeric', month:'short' });
-      document.getElementById('expiryInfo').innerHTML = `<svg class="icon-13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Bayar sebelum ${exp}`;
+      document.getElementById('expiryInfo').innerHTML = '<i data-lucide="clock" class="lucide-sm"></i> Bayar sebelum ' + exp;
     }
-
+    refreshIcons();
     startPolling(data.order_id, data.amount);
   } catch(e) {
     showError(e.message);
@@ -274,8 +326,7 @@ let currentOrderId = null;
 
 function startPolling(orderId, amount) {
   currentOrderId = orderId;
-  let tries = 0;
-  const maxTries = 20;
+  let tries = 0; const maxTries = 20;
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(async () => {
     tries++;
@@ -283,42 +334,30 @@ function startPolling(orderId, amount) {
       const res = await fetch('/api/pakasir/transaction-status/' + encodeURIComponent(orderId));
       const data = await res.json();
       if (data.status === 'completed') {
-        clearInterval(pollTimer);
-        pollTimer = null;
+        clearInterval(pollTimer); pollTimer = null;
         document.getElementById('paymentStep').classList.add('hidden');
         document.getElementById('pendingStep').classList.add('hidden');
         document.getElementById('successStep').classList.remove('hidden');
         document.getElementById('successAmount').textContent = 'Rp' + amount.toLocaleString('id-ID');
+        refreshIcons();
       }
     } catch(e) {}
     if (tries >= maxTries) {
-      clearInterval(pollTimer);
-      pollTimer = null;
+      clearInterval(pollTimer); pollTimer = null;
       document.getElementById('paymentStep').classList.add('hidden');
       document.getElementById('pendingStep').classList.remove('hidden');
     }
   }, 3000);
 }
 
-function showError(msg) {
-  const el = document.getElementById('errorMsg');
-  el.textContent = msg;
-  el.classList.remove('hidden');
-}
+function showError(msg) { const el = document.getElementById('errorMsg'); el.textContent = msg; el.classList.remove('hidden'); }
 
 async function cancelPayment() {
   if (!currentOrderId) return;
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-  const btn = document.getElementById('cancelBtn');
-  btn.disabled = true;
+  const btn = document.getElementById('cancelBtn'); btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Membatalkan...';
-  try {
-    await fetch('/api/pakasir/cancel-transaction', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order_id: currentOrderId })
-    });
-  } catch(e) {}
+  try { await fetch('/api/pakasir/cancel-transaction', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_id: currentOrderId }) }); } catch(e) {}
   currentOrderId = null;
   resetForm();
 }
@@ -334,6 +373,154 @@ function resetForm() {
   document.getElementById('payBtnText').textContent = 'Lanjutkan Pembayaran';
   document.getElementById('errorMsg').classList.add('hidden');
   loadBalance();
+  refreshIcons();
+}
+
+let activeTab = 'topup';
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector(`.tab-btn[onclick*="switchTab('${tab}')"]`);
+  if (btn) btn.classList.add('active');
+  document.getElementById('tabTopup').classList.toggle('hidden', tab !== 'topup');
+  document.getElementById('tabHistory').classList.toggle('hidden', tab !== 'history');
+  document.getElementById('tabSend').classList.toggle('hidden', tab !== 'send');
+  document.getElementById('tabDetail').classList.toggle('hidden', tab !== 'detail');
+  if (tab === 'topup') resetForm();
+  else if (tab === 'history') loadHistory();
+  else if (tab === 'send') resetSendForm();
+  refreshIcons();
+}
+
+async function loadHistory() {
+  const el = document.getElementById('historyList');
+  el.innerHTML = '<div style="text-align:center;padding:40px 0"><div class="spinner" style="border-color:rgba(139,92,246,.2);border-top-color:#8b5cf6;width:32px;height:32px;margin:0 auto;"></div></div>';
+  const tid = tgUser?.id || new URLSearchParams(window.location.search).get('tid');
+  if (!tid) { el.innerHTML = '<div class="tx-item" style="text-align:center;color:var(--tg-theme-hint-color)">Tidak dapat memuat riwayat</div>'; return; }
+  try {
+    const res = await fetch('/api/pakasir/history/' + tid);
+    const data = await res.json();
+    if (!data.history.length) { el.innerHTML = '<div class="tx-item" style="text-align:center;color:var(--tg-theme-hint-color);padding:32px">Belum ada riwayat top-up</div>'; return; }
+    el.innerHTML = data.history.map(tx => `
+      <div class="tx-item" onclick="showDetail('${tx.order_id}')">
+        <div class="tx-row">
+          <span class="tx-amount" style="display:flex;align-items:center;gap:8px;color:${tx.status==='completed'?'#8b5cf6':'#8e8e93'}">
+            <i data-lucide="credit-card" class="lucide"></i> Rp${tx.amount.toLocaleString('id-ID')}
+          </span>
+          <span class="tx-status ${tx.status}">${tx.status==='completed'?'Berhasil':tx.status==='cancelled'?'Dibatalkan':'Pending'}</span>
+        </div>
+        <div class="tx-meta">
+          <span>${tx.payment_method ? tx.payment_method.toUpperCase() : '-'}</span>
+          <span>${new Date(tx.created_at+'Z').toLocaleDateString('id-ID',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
+        </div>
+      </div>`).join('');
+    refreshIcons();
+  } catch(e) { el.innerHTML = '<div class="tx-item" style="text-align:center;color:#dc2626">Gagal memuat riwayat</div>'; }
+}
+
+async function showDetail(orderId) {
+  switchTab('detail');
+  const el = document.getElementById('detailContent');
+  el.innerHTML = '<div style="text-align:center;padding:30px"><div class="spinner" style="border-color:rgba(139,92,246,.2);border-top-color:#8b5cf6;width:32px;height:32px;margin:0 auto;"></div></div>';
+  try {
+    const res = await fetch('/api/pakasir/detail/' + encodeURIComponent(orderId));
+    const tx = await res.json();
+    if (res.status===404) { el.innerHTML = '<div style="color:var(--tg-theme-hint-color);text-align:center;padding:20px">Transaksi tidak ditemukan</div>'; return; }
+    const sc = { completed:'#059669', pending:'#d97706', cancelled:'#dc2626' };
+    const ic = { completed:'check-circle', pending:'clock', cancelled:'x-circle' };
+    const sl = { completed:'Berhasil', pending:'Menunggu', cancelled:'Dibatalkan' };
+    el.innerHTML = `
+      <div style="text-align:center;margin-bottom:16px;font-size:24px;font-weight:800;color:${sc[tx.status]||'#8e8e93'};display:flex;align-items:center;justify-content:center;gap:10px">
+        <i data-lucide="${ic[tx.status]||'help-circle'}" class="lucide-lg"></i> ${sl[tx.status]||tx.status}
+      </div>
+      <div class="detail-row"><span class="detail-label"><i data-lucide="banknote" class="lucide-sm"></i> Jumlah</span><span class="detail-value">Rp${tx.amount.toLocaleString('id-ID')}</span></div>
+      <div class="detail-row"><span class="detail-label"><i data-lucide="hash" class="lucide-sm"></i> Order ID</span><span class="detail-value" style="font-size:11px;word-break:break-all">${tx.order_id}</span></div>
+      <div class="detail-row"><span class="detail-label"><i data-lucide="credit-card" class="lucide-sm"></i> Metode</span><span class="detail-value">${(tx.payment_method||'-').toUpperCase()}</span></div>
+      <div class="detail-row"><span class="detail-label"><i data-lucide="calendar" class="lucide-sm"></i> Tanggal</span><span class="detail-value">${new Date(tx.created_at+'Z').toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'})}</span></div>
+      ${tx.completed_at?`<div class="detail-row"><span class="detail-label"><i data-lucide="check" class="lucide-sm"></i> Selesai</span><span class="detail-value">${new Date(tx.completed_at+'Z').toLocaleDateString('id-ID',{day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'})}</span></div>`:''}`;
+    refreshIcons();
+  } catch(e) { el.innerHTML = '<div style="color:#dc2626;text-align:center;padding:20px">Gagal memuat detail</div>'; }
+}
+
+let sendSelectedAmount = 0;
+
+document.querySelectorAll('.send-amt').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.send-amt').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    sendSelectedAmount = +btn.dataset.amount;
+    document.getElementById('sendAmount').value = '';
+    document.getElementById('sendError').classList.add('hidden');
+  });
+});
+
+document.getElementById('sendAmount').addEventListener('input', e => {
+  sendSelectedAmount = +e.target.value;
+  document.querySelectorAll('.send-amt').forEach(b => b.classList.remove('selected'));
+  document.getElementById('sendError').classList.add('hidden');
+});
+
+function resetSendForm() {
+  sendSelectedAmount = 0;
+  document.getElementById('sendRecipient').value = '';
+  document.getElementById('sendAmount').value = '';
+  document.getElementById('sendError').classList.add('hidden');
+  document.getElementById('sendBtn').disabled = false;
+  document.getElementById('sendBtnText').textContent = 'Kirim Saldo';
+}
+
+async function sendBalance() {
+  const tid = tgUser?.id || new URLSearchParams(window.location.search).get('tid');
+  if (!tid) { showSendError('Tidak dapat membaca identitas'); return; }
+
+  const recipient = document.getElementById('sendRecipient').value.trim();
+  const customAmount = parseInt(document.getElementById('sendAmount').value);
+  const amount = customAmount >= 1000 ? customAmount : sendSelectedAmount;
+
+  if (!recipient) { showSendError('Masukkan Telegram ID atau @username penerima'); return; }
+  if (!amount || amount < 1000) { showSendError('Masukkan jumlah minimal Rp1.000'); return; }
+
+  const btn = document.getElementById('sendBtn');
+  const btnText = document.getElementById('sendBtnText');
+  btn.disabled = true;
+  btnText.innerHTML = '<span class="spinner"></span> Mengirim...';
+
+  try {
+    const res = await fetch('/api/pakasir/transfer', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telegram_id: String(tid), recipient, amount })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Transfer gagal');
+
+    document.getElementById('sendRecipient').value = '';
+    document.getElementById('sendAmount').value = '';
+    sendSelectedAmount = 0;
+    document.querySelectorAll('.send-amt').forEach(b => b.classList.remove('selected'));
+    loadBalance();
+
+    const card = document.getElementById('balanceCard');
+    card.insertAdjacentHTML('afterend', `
+      <div id="sendSuccess" class="payment-card" style="text-align:center;background:#d1fae5;border:1px solid #a7f3d0;margin-bottom:20px;margin-top:0;">
+        <div style="font-size:14px;font-weight:700;color:#059669">✅ Transfer Berhasil!</div>
+        <div style="font-size:12px;color:#065f46;margin-top:2px">Rp${amount.toLocaleString('id-ID')} terkirim ke ${data.receiverName || recipient}</div>
+      </div>`);
+    setTimeout(() => { const el = document.getElementById('sendSuccess'); if (el) el.remove(); }, 4000);
+
+    btn.disabled = false;
+    btnText.textContent = 'Kirim Saldo';
+  } catch(e) {
+    showSendError(e.message);
+    btn.disabled = false;
+    btnText.textContent = 'Kirim Saldo';
+  }
+}
+
+function showSendError(msg) {
+  const el = document.getElementById('sendError');
+  el.textContent = msg;
+  el.classList.remove('hidden');
 }
 </script>
 </body>

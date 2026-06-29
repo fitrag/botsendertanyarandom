@@ -32,7 +32,7 @@ document.getElementById('themeToggle').addEventListener('click', () => {
 
 // ===== NAV =====
 let currentPage = 'dashboard';
-const titles = { dashboard: 'Dashboard', messages: 'Kiriman Pesan', users: 'Pengguna', settings: 'Pengaturan' };
+const titles = { dashboard: 'Dashboard', messages: 'Kiriman Pesan', users: 'Pengguna', settings: 'Pengaturan', support: 'Support' };
 const navActive = 'bg-violet-50 dark:bg-violet-600/10 text-violet-600 dark:text-violet-400';
 const navInactive = 'text-slate-500 dark:text-zinc-400';
 
@@ -54,6 +54,7 @@ function navigateTo(page) {
   else if (page === 'messages') loadMessages();
   else if (page === 'users') loadUsers();
   else if (page === 'settings') loadSettings();
+  else if (page === 'support') loadSupport();
 }
 
 // ===== LOGOUT =====
@@ -443,7 +444,7 @@ function topupUser(id, name) {
 
 // ===== SETTINGS =====
 const sFields = ['welcome_message','help_message','approve_message','reject_message','channel_id','channel_footer','rate_limit','referral_cash_amount','referral_min_referrals','message_cost','pakasir_slug','pakasir_api_key'];
-const sToggles = ['maintenance_mode','notify_admin','notify_comments','referral_enabled','auto_post','paid_message_enabled'];
+const sToggles = ['maintenance_mode','notify_admin','notify_comments','referral_enabled','auto_post','paid_message_enabled','topup_bot_enabled','topup_miniapp_enabled'];
 const sSelects = [];
 
 async function loadSettings() {
@@ -476,6 +477,90 @@ function renderPagination(id, data, onClick) {
   h += `<span class="text-[10px] text-slate-400 dark:text-zinc-500 ml-1.5">${data.total} data</span>`;
   el.innerHTML = h;
   el.querySelectorAll('button:not(:disabled)').forEach(b => b.addEventListener('click', () => onClick(+b.dataset.p)));
+}
+
+// ===== SUPPORT =====
+let supFilter = 'open', supPage = 1;
+
+async function loadSupport() {
+  const el = document.getElementById('supportList');
+  el.innerHTML = '<div class="flex justify-center py-16"><div class="w-5 h-5 border-2 border-slate-200 dark:border-zinc-700 border-t-violet-500 rounded-full animate-spin"></div></div>';
+  try {
+    const data = await api(`/api/support-tickets?page=${supPage}&limit=20&status=${supFilter}`);
+    if (!data.tickets.length) { el.innerHTML = '<div class="text-center py-20 text-slate-400 dark:text-zinc-600 text-xs">Tidak ada tiket</div>'; document.getElementById('supPagination').innerHTML = ''; return; }
+    el.innerHTML = data.tickets.map(t => {
+      const sc = { open: 'bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400', replied: 'bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400', closed: 'bg-slate-100 dark:bg-slate-800/40 text-slate-500 dark:text-zinc-500' };
+      return `
+        <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/60 rounded-2xl p-5 shadow-sm dark:shadow-none">
+          <div class="flex items-start justify-between mb-3">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-sm font-bold text-slate-900 dark:text-zinc-100">#SUP${t.id}</span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold ${sc[t.status] || ''}">${t.status}</span>
+              </div>
+              <div class="text-xs font-semibold text-slate-700 dark:text-zinc-300">${esc(t.subject || 'Tanpa subjek')}</div>
+              <div class="text-[10px] text-slate-400 dark:text-zinc-500">${esc(t.user_name || '')} · ${fmtDate(t.created_at)}</div>
+            </div>
+            <div class="flex gap-1.5 flex-shrink-0">
+              ${t.status !== 'closed' ? `<button onclick="replyTicket(${t.id})" class="px-3 py-1.5 bg-violet-50 dark:bg-violet-600/10 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-600/20 rounded-lg text-[11px] font-semibold transition-colors">Balas</button>` : ''}
+              ${t.status !== 'closed' ? `<button onclick="closeTicket(${t.id})" class="px-3 py-1.5 text-slate-400 dark:text-zinc-500 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg text-[11px] font-semibold transition-colors">Tutup</button>` : ''}
+            </div>
+          </div>
+          <div class="bg-slate-50 dark:bg-zinc-800/60 rounded-xl p-3.5 text-[13px] text-slate-600 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">${esc(t.message)}</div>
+          <div class="mt-2" id="conv-${t.id}">
+            <button onclick="loadConversation(${t.id})" class="text-[11px] font-semibold text-violet-500 hover:text-violet-400 transition-colors">📋 Lihat Percakapan</button>
+          </div>
+        </div>`;
+    }).join('');
+    renderPagination('supPagination', data, p => { supPage = p; loadSupport(); });
+  } catch(e) { el.innerHTML = `<div class="text-center py-16 text-rose-500 text-xs">${e.message}</div>`; }
+}
+
+function replyTicket(id) {
+  const overlay = document.createElement('div');
+  overlay.className = 'fixed inset-0 z-[9000] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4';
+  overlay.innerHTML = `
+    <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl p-6 w-full max-w-md shadow-xl">
+      <h3 class="text-sm font-bold text-slate-900 dark:text-zinc-100 mb-3">💬 Balas Tiket #SUP${id}</h3>
+      <textarea id="replyText" rows="4" placeholder="Tulis balasan untuk pengguna..." class="w-full px-3 py-2.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-sm text-slate-800 dark:text-zinc-200 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 resize-none transition mb-4"></textarea>
+      <div class="flex gap-2">
+        <button id="replyCancelBtn" class="flex-1 py-2 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs font-medium text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition">Batal</button>
+        <button id="replyConfirmBtn" class="flex-1 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-semibold transition">Kirim Balasan</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.getElementById('replyCancelBtn').addEventListener('click', () => overlay.remove());
+  document.getElementById('replyConfirmBtn').addEventListener('click', async () => {
+    const reply = document.getElementById('replyText').value.trim();
+    if (!reply) { toast('Tulis balasan', 'error'); return; }
+    try {
+      await api(`/api/support-tickets/${id}/reply`, { method: 'POST', body: { reply } });
+      toast('✅ Balasan terkirim!');
+      overlay.remove();
+      loadSupport();
+    } catch(e) { toast(e.message, 'error'); }
+  });
+}
+
+async function closeTicket(id) {
+  if (!confirm('Tutup tiket ini?')) return;
+  try { await api(`/api/support-tickets/${id}/close`, { method: 'POST' }); toast('Tiket ditutup'); loadSupport(); } catch(e) { toast(e.message, 'error'); }
+}
+
+async function loadConversation(ticketId) {
+  const el = document.getElementById('conv-' + ticketId);
+  try {
+    const data = await api(`/api/support-tickets/${ticketId}/messages`);
+    if (!data.messages.length) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div class="mt-3 space-y-2">${data.messages.map(m => `
+      <div class="flex gap-2">
+        <span class="text-[10px] font-bold flex-shrink-0 ${m.sender === 'admin' ? 'text-violet-500' : 'text-emerald-500'}">${m.sender === 'admin' ? 'Admin' : 'User'}</span>
+        <div class="flex-1 bg-slate-50 dark:bg-zinc-800/60 rounded-lg px-3 py-2 text-[12px] text-slate-600 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">${esc(m.message)}</div>
+        <span class="text-[9px] text-slate-400 dark:text-zinc-600 flex-shrink-0 self-end">${timeAgo(m.created_at)}</span>
+      </div>
+    `).join('')}</div>`;
+  } catch(e) { el.innerHTML = ''; }
 }
 
 // ===== INIT =====

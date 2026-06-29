@@ -153,4 +153,40 @@ router.post('/change-password', (req, res) => {
   res.json({ success: true });
 });
 
+// Support Tickets
+router.get('/support-tickets', (req, res) => {
+  const { page = 1, limit = 20, status = '' } = req.query;
+  res.json(db.getSupportTickets(+page, +limit, status));
+});
+
+router.get('/support-tickets/:id/messages', (req, res) => {
+  res.json({ messages: db.getSupportMessages(req.params.id) });
+});
+
+router.post('/support-tickets/:id/reply', (req, res) => {
+  const { reply } = req.body || {};
+  if (!reply) return res.status(400).json({ error: 'Reply diperlukan' });
+  const ticket = db.getSupportTicket(req.params.id);
+  if (!ticket) return res.status(404).json({ error: 'Tiket tidak ditemukan' });
+  db.replySupportTicket(req.params.id, reply);
+  try {
+    const bot = require('../bot/bot').getBot();
+    if (bot && ticket.telegram_id) {
+      bot.sendMessage(ticket.telegram_id,
+        `📞 *Balasan Support #SUP${ticket.id}*\n\n📋 Subjek: _${ticket.subject}_\n\n💬 Balasan admin:\n${reply}`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [[{ text: '💬 Balas', callback_data: `support_reply_${ticket.id}` }]] }
+        }
+      ).catch(() => {});
+    }
+  } catch(e) {}
+  res.json({ success: true });
+});
+
+router.post('/support-tickets/:id/close', (req, res) => {
+  db.closeSupportTicket(req.params.id);
+  res.json({ success: true });
+});
+
 module.exports = router;
