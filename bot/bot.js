@@ -3,6 +3,8 @@ const db = require('../database/db');
 
 let bot;
 const rateLimitMap = new Map();
+const writeMode = new Set();
+const lastBotMsg = new Map();
 
 function initBot(token) {
   bot = new TelegramBot(token, { polling: true });
@@ -40,25 +42,28 @@ function initBot(token) {
       bot.sendMessage(chatId, customHelp.replace(/\\n/g, '\n'));
       return;
     }
+    const isPaid = db.getSetting('paid_message_enabled') === 'true';
+    const messageCost = parseInt(db.getSetting('message_cost') || '5000');
     const help = `📖 *Panduan Penggunaan Bot*\n\n` +
-      `🔹 *Mengirim Pesan Teks*\nCukup ketik pesanmu langsung di chat ini. Tidak perlu perintah khusus!\n\n` +
-      `🔹 *Cek Status Kiriman*\nKetik /status untuk melihat apakah pesanmu sudah disetujui.\n\n` +
+      `🔹 *Mengirim Pesan*\nKlik *✏️ Kirim Pesan* di Menu Utama, lalu tulis pesanmu. Bisa juga gunakan perintah /kirim.\n` +
+      (isPaid ? `\n💰 Biaya kirim: *Rp${messageCost.toLocaleString('id-ID')}* / pesan\nGunakan /balance untuk cek saldo, /topup untuk isi saldo.\n` : '') +
+      `\n🔹 *Cek Status*\nKlik *📋 Status Kiriman* atau ketik /status.\n\n` +
+      `🔹 *Dapatkan Saldo*\nAjak teman lewat *🔗 Referral* — dapat hadiah saldo untuk biaya kirim pesan!\n\n` +
       `━━━━━━━━━━━━━━━━━\n\n` +
-      `⚠️ *Peraturan:*\n• Jangan kirim spam atau pesan berulang\n• Konten harus sopan dan sesuai aturan\n• Admin berhak menolak pesan yang tidak sesuai\n\n` +
-      `✏️ *Silakan ketik pesanmu sekarang...*`;
+      `⚠️ *Peraturan:*\n• Jangan kirim spam atau pesan berulang\n• Konten harus sopan dan sesuai aturan\n• Admin berhak menolak pesan yang tidak sesuai`;
     bot.sendMessage(chatId, help, { parse_mode: 'Markdown' });
   }
 
   function sendStatus(chatId, userId) {
     const msgs = db.getUserMessages(userId);
     if (!msgs.length) {
-      bot.sendMessage(chatId, `📭 *Belum Ada Kiriman*\n\nKamu belum pernah mengirim pesan.\n\n✏️ Silakan ketik pesan atau kirim foto sekarang untuk memulai!`, { parse_mode: 'Markdown' });
+      bot.sendMessage(chatId, `📭 *Belum Ada Kiriman*\n\nKamu belum pernah mengirim pesan.\n\nKlik *✏️ Kirim Pesan* dari menu untuk mulai!`, { parse_mode: 'Markdown' });
       return;
     }
     const statusLabels = { pending: '⏳ Menunggu Review', approved: '✅ Disetujui & Diposting', rejected: '❌ Tidak Disetujui' };
     let text = `📋 *5 Kiriman Terakhirmu:*\n\n`;
     msgs.forEach((m, i) => {
-      const preview = m.content ? m.content.substring(0, 40) : '📷 Foto';
+      const preview = m.content ? m.content.substring(0, 40) : '💬 Pesan';
       const date = new Date(m.created_at + 'Z').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
       text += `${i + 1}. ${statusLabels[m.status] || m.status}\n    💬 _${preview}${m.content && m.content.length > 40 ? '...' : ''}_\n    📅 ${date}\n\n`;
     });
@@ -85,6 +90,36 @@ function initBot(token) {
     );
   }
 
+  async function sendClean(chatId, text, options = {}) {
+    const prevMsgId = lastBotMsg.get(String(chatId));
+    if (prevMsgId) {
+      try { await bot.deleteMessage(chatId, prevMsgId); } catch(e) {}
+    }
+    const sent = await bot.sendMessage(chatId, text, options);
+    lastBotMsg.set(String(chatId), sent.message_id);
+    return sent;
+  }
+
+  async function showMainMenu(chatId) {
+    const isPaid = db.getSetting('paid_message_enabled') === 'true';
+    const cost = parseInt(db.getSetting('message_cost') || '5000');
+    const paidLabel = isPaid ? `\n💰 Biaya: *Rp${cost.toLocaleString('id-ID')}* / pesan` : '';
+    return sendClean(chatId,
+      `📋 *Menu Utama*${paidLabel}\n\nSilakan pilih menu di bawah:`,
+      {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '✏️ Kirim Pesan', callback_data: 'menu_write' }],
+            [{ text: '💰 Cek Saldo', callback_data: 'menu_balance' }, { text: '📋 Status Kiriman', callback_data: 'check_status' }],
+            [{ text: '🔗 Referral', callback_data: 'menu_referral' }, { text: '💳 Top-Up', callback_data: 'menu_topup' }],
+            [{ text: '❓ Bantuan', callback_data: 'show_help' }]
+          ]
+        }
+      }
+    );
+  }
+
   function askGender(chatId) {
     bot.sendMessage(chatId,
       `👤 *Pilih Jenis Kelamin*\n\nSilakan pilih jenis kelamin kamu. Ini akan digunakan untuk memberi tag pada pesanmu di channel.`,
@@ -101,15 +136,6 @@ function initBot(token) {
       }
     );
   }
-
-  // ===== INLINE BUTTON HANDLER =====
-  bot.on('callback_query', (query) => {
-    // Only process in private chat
-    if (query.message.chat.type !== 'private') return;
-    bot.answerCallbackQuery(query.id);
-    if (query.data === 'check_status') sendStatus(query.message.chat.id, query.from.id);
-    else if (query.data === 'show_help') sendHelp(query.message.chat.id);
-  });
 
   // ===== COMMENT HANDLER — Save & Notify =====
   bot.on('message', (msg) => {
@@ -164,6 +190,7 @@ function initBot(token) {
 
   // ===== CALLBACK QUERY HANDLER =====
   bot.on('callback_query', async (query) => {
+    if (query.message.chat.type !== 'private') return;
     const chatId = query.message.chat.id;
     const fromId = String(query.from.id);
     const data = query.data;
@@ -175,10 +202,12 @@ function initBot(token) {
       sendHelp(chatId);
     } else if (data === 'set_gender_laki') {
       db.setGender(query.from.id, 'male');
-      bot.sendMessage(chatId, `✅ Jenis kelamin disimpan: *Laki-laki* 🧑\n\nSekarang kamu bisa kirim pesan! Ketik langsung di sini.`, { parse_mode: 'Markdown' });
+      bot.sendMessage(chatId, `✅ Jenis kelamin disimpan: *Laki-laki* 🧑`, { parse_mode: 'Markdown' });
+      setTimeout(() => showMainMenu(chatId), 400);
     } else if (data === 'set_gender_perempuan') {
       db.setGender(query.from.id, 'female');
-      bot.sendMessage(chatId, `✅ Jenis kelamin disimpan: *Perempuan* 👩\n\nSekarang kamu bisa kirim pesan! Ketik langsung di sini.`, { parse_mode: 'Markdown' });
+      bot.sendMessage(chatId, `✅ Jenis kelamin disimpan: *Perempuan* 👩`, { parse_mode: 'Markdown' });
+      setTimeout(() => showMainMenu(chatId), 400);
     } else if (data.startsWith('topup_')) {
       const amount = parseInt(data.replace('topup_', ''));
       const slug = db.getSetting('pakasir_slug');
@@ -187,6 +216,68 @@ function initBot(token) {
         return;
       }
       createTopupPayment(chatId, query.from.id, amount, slug);
+    } else if (data === 'menu_write') {
+      writeMode.add(fromId);
+      sendClean(chatId,
+        `✏️ *Tulis Pesan*\n\nSilakan ketik pesan yang ingin kamu kirim ke channel.\n\n_Pesanmu akan direview admin terlebih dahulu._\n\n📌 Ketik *batal* untuk keluar.`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'menu_cancel_write' }]] }
+        }
+      );
+    } else if (data === 'menu_cancel_write') {
+      writeMode.delete(fromId);
+      showMainMenu(chatId);
+    } else if (data === 'menu_balance') {
+      const totalBalance = db.getTotalBalance(query.from.id);
+      const isPaid = db.getSetting('paid_message_enabled') === 'true';
+      const messageCost = parseInt(db.getSetting('message_cost') || '5000');
+      bot.sendMessage(chatId,
+        `💰 *Saldo Kamu*\n\nSaldo: *Rp${totalBalance.toLocaleString('id-ID')}*\n` +
+        (isPaid ? `Biaya kirim pesan: *Rp${messageCost.toLocaleString('id-ID')}*\nBisa kirim: *${Math.floor(totalBalance / messageCost)} pesan*` : `Kirim pesan: *GRATIS* 🎉`),
+        { parse_mode: 'Markdown' }
+      );
+      setTimeout(() => showMainMenu(chatId), 500);
+    } else if (data === 'menu_referral') {
+      if (db.getSetting('referral_enabled') !== 'true') {
+        bot.sendMessage(chatId, `❌ Fitur referral sedang tidak aktif.`, { parse_mode: 'Markdown' });
+        setTimeout(() => showMainMenu(chatId), 500);
+      } else {
+        const botInfo = await bot.getMe();
+        const refLink = `https://t.me/${botInfo.username}?start=ref_${query.from.id}`;
+        const refCount = db.getReferralCount(query.from.id);
+        const cashAmount = parseInt(db.getSetting('referral_cash_amount') || '10000');
+        bot.sendMessage(chatId,
+          `🔗 *Program Referral*\n\nAjak teman dapat *Rp${cashAmount.toLocaleString('id-ID')}* saldo!\n📊 Referralmu: *${refCount}*\n\n📎 Link:\n\`${refLink}\``,
+          { parse_mode: 'Markdown' }
+        );
+        setTimeout(() => showMainMenu(chatId), 600);
+      }
+    } else if (data === 'menu_topup') {
+      const slug = db.getSetting('pakasir_slug');
+      if (!slug) {
+        bot.sendMessage(chatId, `💳 Top-up belum dikonfigurasi.\n\nHubungi admin untuk top-up.`, { parse_mode: 'Markdown' });
+      } else {
+        const miniAppUrl = process.env.WEBAPP_URL || '';
+        const keyboard = [];
+        if (miniAppUrl) keyboard.push([{ text: '📱 Buka Aplikasi Top-Up', web_app: { url: miniAppUrl + '/topup' } }]);
+        keyboard.push(
+          [{ text: '💰 Rp10.000', callback_data: 'topup_10000' }],
+          [{ text: '💰 Rp25.000', callback_data: 'topup_25000' }],
+          [{ text: '💰 Rp50.000', callback_data: 'topup_50000' }],
+          [{ text: '💰 Rp100.000', callback_data: 'topup_100000' }],
+          [{ text: '« Kembali', callback_data: 'menu_back' }]
+        );
+        sendClean(chatId,
+          `💳 *Top-Up Saldo*\n\nPilih nominal atau ketik /topup <jumlah>`,
+          {
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: keyboard }
+          }
+        );
+      }
+    } else if (data === 'menu_back') {
+      showMainMenu(chatId);
     }
   });
 
@@ -223,15 +314,22 @@ function initBot(token) {
           }
         }
         sendWelcome(chatId, from);
-        // Prompt gender if not set
-        const startedUser = db.getUser(from.id);
-        if (!startedUser || !startedUser.gender) {
-          setTimeout(() => askGender(chatId), 600);
-        }
+        // Prompt gender if not set, otherwise show main menu
+        setTimeout(() => {
+          const startedUser = db.getUser(from.id);
+          if (!startedUser || !startedUser.gender) {
+            askGender(chatId);
+          } else {
+            showMainMenu(chatId);
+          }
+        }, 600);
       } else if (cmd === '/help') {
         sendHelp(chatId);
       } else if (cmd === '/status') {
         sendStatus(chatId, from.id);
+      } else if (cmd === '/menu') {
+        writeMode.delete(String(from.id));
+        showMainMenu(chatId);
       } else if (cmd === '/referral') {
         if (db.getSetting('referral_enabled') !== 'true') {
           bot.sendMessage(chatId, `❌ Fitur referral sedang tidak aktif.`, { parse_mode: 'Markdown' });
@@ -282,7 +380,7 @@ function initBot(token) {
               [{ text: '💰 Rp50.000', callback_data: 'topup_50000' }],
               [{ text: '💰 Rp100.000', callback_data: 'topup_100000' }]
             );
-            bot.sendMessage(chatId,
+            sendClean(chatId,
               `💳 *Top-Up Saldo via Pakasir*\n\n` +
               (miniAppUrl ? `📱 *Rekomendasi:* Gunakan aplikasi top-up untuk pengalaman lebih baik!\n\n` : '') +
               `Pilih nominal top-up:\n\n` +
@@ -297,15 +395,16 @@ function initBot(token) {
       } else if (cmd === '/kirim') {
         const text = msg.text.replace(/^\/kirim(@\w+)?\s*/i, '').trim();
         if (!text) {
-          bot.sendMessage(chatId,
-            `✏️ *Cara Mengirim Pesan:*\n\n` +
-            `1️⃣ Ketik langsung: \`/kirim pesanmu di sini\`\n` +
-            `2️⃣ Atau ketik teks tanpa command\n\n` +
-            `_Contoh:_ \`/kirim Halo, ini pesan anonim!\``,
-            { parse_mode: 'Markdown' }
+          writeMode.add(String(from.id));
+          sendClean(chatId,
+            `✏️ *Tulis Pesan*\n\nSilakan ketik pesan yang ingin kamu kirim ke channel.\n\n📌 Ketik *batal* untuk keluar.`,
+            {
+              parse_mode: 'Markdown',
+              reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'menu_cancel_write' }]] }
+            }
           );
+          return;
         } else {
-          // Process inline /kirim <message> — skip to text handler below
           msg._kirimText = text;
         }
         if (!msg._kirimText) return;
@@ -314,6 +413,7 @@ function initBot(token) {
           `❓ *Command tidak dikenal*\n\n` +
           `Gunakan salah satu command berikut:\n` +
           `• /start — Mulai bot\n` +
+          `• /menu — Tampilkan menu utama\n` +
           `• /kirim — Kirim pesan anonim\n` +
           `• /balance — Cek saldo\n` +
           `• /topup — Info top-up saldo\n` +
@@ -346,72 +446,92 @@ function initBot(token) {
       return;
     }
 
-    // ── PAID MESSAGE CHECK ──
-    if (db.getSetting('paid_message_enabled') === 'true') {
-      const messageCost = parseInt(db.getSetting('message_cost') || '5000');
-      const totalBalance = db.getTotalBalance(from.id);
-      if (totalBalance < messageCost) {
-        bot.sendMessage(chatId,
-          `💰 *Saldo Tidak Cukup*\n\n` +
-          `Biaya kirim pesan: *Rp${messageCost.toLocaleString('id-ID')}*\n` +
-          `Saldo kamu: *Rp${totalBalance.toLocaleString('id-ID')}*\n` +
-          `Kekurangan: *Rp${(messageCost - totalBalance).toLocaleString('id-ID')}*\n\n` +
-          `📌 Cara isi saldo:\n` +
-          `• 🎁 Ajak teman lewat /referral\n` +
-          `• 💳 Top-up via admin (ketik /topup)\n\n` +
-          `_Saldo akan otomatis terpotong saat kirim pesan._`,
-          { parse_mode: 'Markdown' }
-        );
+    // ── WRITE MODE CHECK ──
+    const inWriteMode = writeMode.has(String(from.id)) || !!msg._kirimText;
+
+    // ── TEXT (write mode or /kirim) ──
+    if (msg.text) {
+      const text = msg._kirimText || msg.text;
+
+      // "batal" to exit write mode
+      if (inWriteMode && !msg._kirimText && text.trim().toLowerCase() === 'batal') {
+        writeMode.delete(String(from.id));
+        showMainMenu(chatId);
         return;
       }
-      db.deductBalance(from.id, messageCost);
-    }
 
-    // ── CHECK AUTO-POST / VIP ──
-    const autoPost = db.getSetting('auto_post') === 'true';
-    const isVip = autoPost || (user.is_vip && (!user.vip_expires_at || new Date(user.vip_expires_at + 'Z') > new Date()));
+      if (inWriteMode) {
+        writeMode.delete(String(from.id));
 
-    // ── RATE LIMIT ──
-    const limit = parseInt(db.getSetting('rate_limit') || '5');
-    const now = Date.now(), key = String(from.id);
-    if (!rateLimitMap.has(key)) rateLimitMap.set(key, []);
-    const ts = rateLimitMap.get(key).filter(t => now - t < 60000);
-    if (ts.length >= limit) {
-      const waitSec = Math.ceil((60000 - (now - ts[0])) / 1000);
-      bot.sendMessage(chatId, `⏳ *Terlalu Cepat!*\n\nKamu sudah mengirim ${limit} pesan dalam 1 menit terakhir.\nTunggu *${waitSec} detik* lagi sebelum mengirim pesan baru.`, { parse_mode: 'Markdown' });
-      return;
-    }
-    ts.push(now);
-    rateLimitMap.set(key, ts);
-
-    // ── TEXT ──
-    if (msg.text || msg._kirimText) {
-      const content = msg._kirimText || msg.text;
-      if (isVip) {
-        // VIP: auto-post to channel
-        const msgId = db.createMessage(user.id, from.id, content, 'approved');
-        try {
-          const message = db.getMessage(msgId);
-          const result = await postToChannel(message);
-          db.setPostedMessageId(msgId, result.message_id);
-          const label = autoPost && !user.is_vip
-            ? `🚀 *Pesan Langsung Diposting!*\n\n📋 ID Kiriman: \`#${msgId}\`\n📌 Status: ✅ Diposting ke channel\n\n_Pesanmu langsung terbit di channel!_`
-            : `⭐ *VIP — Pesan Langsung Diposting!*\n\n📋 ID Kiriman: \`#${msgId}\`\n📌 Status: ✅ Diposting ke channel\n\n_Keuntungan VIP: pesanmu langsung terbit tanpa review!_`;
-          bot.sendMessage(chatId, label,
-            { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '📋 Cek Status', callback_data: 'check_status' }]] } }
-          );
-        } catch (e) {
-          bot.sendMessage(chatId, `⚠️ Gagal posting otomatis: ${e.message}`, { parse_mode: 'Markdown' });
+        // ── PAID MESSAGE CHECK ──
+        if (db.getSetting('paid_message_enabled') === 'true') {
+          const messageCost = parseInt(db.getSetting('message_cost') || '5000');
+          const totalBalance = db.getTotalBalance(from.id);
+          if (totalBalance < messageCost) {
+            bot.sendMessage(chatId,
+              `💰 *Saldo Tidak Cukup*\n\n` +
+              `Biaya kirim pesan: *Rp${messageCost.toLocaleString('id-ID')}*\n` +
+              `Saldo kamu: *Rp${totalBalance.toLocaleString('id-ID')}*\n` +
+              `Kekurangan: *Rp${(messageCost - totalBalance).toLocaleString('id-ID')}*\n\n` +
+              `📌 Cara isi saldo:\n` +
+              `• 🎁 Ajak teman lewat /referral\n` +
+              `• 💳 Top-up via admin (ketik /topup)\n\n` +
+              `_Saldo akan otomatis terpotong saat kirim pesan._`,
+              { parse_mode: 'Markdown' }
+            );
+            showMainMenu(chatId);
+            return;
+          }
+          db.deductBalance(from.id, messageCost);
         }
+
+        // ── CHECK AUTO-POST / VIP ──
+        const autoPost = db.getSetting('auto_post') === 'true';
+        const isVip = autoPost || (user.is_vip && (!user.vip_expires_at || new Date(user.vip_expires_at + 'Z') > new Date()));
+
+        // ── RATE LIMIT ──
+        const limit = parseInt(db.getSetting('rate_limit') || '5');
+        const now = Date.now(), key = String(from.id);
+        if (!rateLimitMap.has(key)) rateLimitMap.set(key, []);
+        const ts = rateLimitMap.get(key).filter(t => now - t < 60000);
+        if (ts.length >= limit) {
+          const waitSec = Math.ceil((60000 - (now - ts[0])) / 1000);
+          bot.sendMessage(chatId, `⏳ *Terlalu Cepat!*\n\nKamu sudah mengirim ${limit} pesan dalam 1 menit terakhir.\nTunggu *${waitSec} detik* lagi sebelum mengirim pesan baru.`, { parse_mode: 'Markdown' });
+          return;
+        }
+        ts.push(now);
+        rateLimitMap.set(key, ts);
+
+        // ── POST MESSAGE ──
+        const content = text;
+        if (isVip) {
+          const msgId = db.createMessage(user.id, from.id, content, 'approved');
+          try {
+            const message = db.getMessage(msgId);
+            const result = await postToChannel(message);
+            db.setPostedMessageId(msgId, result.message_id);
+            const label = autoPost && !user.is_vip
+              ? `🚀 *Pesan Langsung Diposting!*\n\n📋 ID Kiriman: \`#${msgId}\`\n📌 Status: ✅ Diposting ke channel`
+              : `⭐ *VIP — Pesan Langsung Diposting!*\n\n📋 ID Kiriman: \`#${msgId}\`\n📌 Status: ✅ Diposting ke channel`;
+            bot.sendMessage(chatId, label, { parse_mode: 'Markdown' });
+          } catch (e) {
+            bot.sendMessage(chatId, `⚠️ Gagal posting otomatis: ${e.message}`, { parse_mode: 'Markdown' });
+          }
+        } else {
+          const msgId = db.createMessage(user.id, from.id, content);
+          bot.sendMessage(chatId,
+            `✅ *Pesan Berhasil Dikirim!*\n\n📋 ID Kiriman: \`#${msgId}\`\n📌 Status: ⏳ Menunggu review admin`,
+            { parse_mode: 'Markdown' }
+          );
+          notifyAdmin(msgId, user, content);
+        }
+        showMainMenu(chatId);
+        return;
       } else {
-        const msgId = db.createMessage(user.id, from.id, content);
-        bot.sendMessage(chatId,
-          `✅ *Pesan Berhasil Dikirim!*\n\n📋 ID Kiriman: \`#${msgId}\`\n📌 Status: ⏳ Menunggu review admin\n\nKamu akan mendapat notifikasi saat pesanmu diproses.\n\n_Ingin kirim pesan lagi? Ketik /kirim atau langsung ketik saja!_`,
-          { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '📋 Cek Status', callback_data: 'check_status' }]] } }
-        );
-        notifyAdmin(msgId, user, content);
+        // Not in write mode — show main menu
+        showMainMenu(chatId);
+        return;
       }
-      return;
     }
 
     // ── UNSUPPORTED FORMAT ──

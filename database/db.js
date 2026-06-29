@@ -149,7 +149,7 @@ async function initDb() {
     welcome_message: '👋 Selamat datang!\\nKirimkan pesan teks yang ingin kamu sampaikan secara anonim.\\nPesan akan direview admin sebelum diposting ke channel.',
     approve_message: '✅ Pesanmu telah disetujui dan diposting ke channel!',
     reject_message: '❌ Maaf, pesanmu tidak disetujui oleh admin.',
-    help_message: '📝 Cara menggunakan bot:\\n\\n1. Kirim pesan teks atau foto\\n2. Pesan akan direview oleh admin\\n3. Jika disetujui, pesan diposting ke channel secara anonim\\n\\nGunakan /status untuk cek status kiriman.',
+    help_message: '📝 Cara menggunakan bot:\\n\\n1. Dari Menu Utama, klik Kirim Pesan\\n2. Tulis pesan yang ingin dikirim\\n3. Admin akan mereview pesanmu\\n4. Jika disetujui, pesan diposting ke channel\\n\\nGunakan /menu untuk kembali ke menu utama.',
     channel_id: '', rate_limit: '5', maintenance_mode: 'false', port: '3000',
     channel_footer: '', notify_admin: 'true', notify_comments: 'true',
     auto_post: 'false',
@@ -347,6 +347,11 @@ module.exports = {
       [paymentMethod || '', orderId]);
     saveDb();
     return this.getTopupByOrderId(orderId);
+  },
+
+  cancelTopupTransaction(orderId) {
+    db.run("UPDATE topup_transactions SET status = 'cancelled' WHERE order_id = ?", [orderId]);
+    saveDb();
   },
 
   createMessage(userId, tgId, content, status = 'pending') {

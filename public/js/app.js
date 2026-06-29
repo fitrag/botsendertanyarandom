@@ -292,10 +292,10 @@ document.getElementById('userPerPage').addEventListener('change', e => { userLim
 
 async function loadUsers() {
   const tb = document.getElementById('usersTableBody');
-  tb.innerHTML = '<tr><td colspan="6" class="text-center py-16"><div class="w-5 h-5 border-2 border-slate-200 dark:border-zinc-700 border-t-violet-500 rounded-full animate-spin mx-auto"></div></td></tr>';
+  tb.innerHTML = '<tr><td colspan="7" class="text-center py-16"><div class="w-5 h-5 border-2 border-slate-200 dark:border-zinc-700 border-t-violet-500 rounded-full animate-spin mx-auto"></div></td></tr>';
   try {
     const data = await api(`/api/users?page=${userPage}&limit=${userLimit}&search=${encodeURIComponent(userSearch)}`);
-    if (!data.users.length) { tb.innerHTML = '<tr><td colspan="6" class="text-center py-16 text-slate-400 dark:text-zinc-600 text-xs">Tidak ada pengguna</td></tr>'; document.getElementById('userPagination').innerHTML = ''; return; }
+    if (!data.users.length) { tb.innerHTML = '<tr><td colspan="7" class="text-center py-16 text-slate-400 dark:text-zinc-600 text-xs">Tidak ada pengguna</td></tr>'; document.getElementById('userPagination').innerHTML = ''; return; }
     tb.innerHTML = data.users.map(u => {
       const vipExpiry = u.is_vip && u.vip_expires_at ? new Date(u.vip_expires_at + 'Z') : null;
       const vipDaysLeft = vipExpiry ? Math.max(0, Math.ceil((vipExpiry - Date.now()) / 86400000)) : 0;
@@ -325,6 +325,7 @@ async function loadUsers() {
           </div>
         </td>
         <td class="px-5 py-3.5 font-mono text-[10px] text-slate-400 dark:text-zinc-500">${u.telegram_id}</td>
+        <td class="px-5 py-3.5 text-xs font-bold text-violet-600 dark:text-violet-400">Rp${((u.balance || 0) + (u.referral_balance || 0)).toLocaleString('id-ID')}</td>
         <td class="px-5 py-3.5 text-xs font-bold">${u.message_count}</td>
         <td class="px-5 py-3.5">${statusBadge}</td>
         <td class="px-5 py-3.5 text-[10px] text-slate-400 dark:text-zinc-500">${fmtDate(u.last_active)}</td>
@@ -332,7 +333,7 @@ async function loadUsers() {
       </tr>`;
     }).join('');
     renderPagination('userPagination', data, p => { userPage = p; loadUsers(); });
-  } catch (e) { tb.innerHTML = `<tr><td colspan="6" class="text-center py-16 text-rose-500 text-xs">${e.message}</td></tr>`; }
+  } catch (e) { tb.innerHTML = `<tr><td colspan="7" class="text-center py-16 text-rose-500 text-xs">${e.message}</td></tr>`; }
 }
 
 async function banUser(id) { if (!confirm('Ban pengguna ini?')) return; try { await api(`/api/users/${id}/ban`,{method:'POST'}); toast('User dibanned'); loadUsers(); } catch(e) { toast(e.message,'error'); } }

@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Top-Up Saldo</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -17,7 +16,7 @@
     }
     .container { max-width: 420px; margin: 0 auto; }
     .header { text-align: center; padding: 28px 0 20px; }
-    .header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+    .header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; justify-content: center; gap: 8px; }
     .header p { font-size: 13px; color: var(--tg-theme-hint-color, #8e8e93); margin-top: 4px; }
 
     .balance-card {
@@ -53,6 +52,7 @@
       padding: 10px 16px; border-radius: 12px; border: 1.5px solid var(--tg-theme-secondary-bg-color, #e8e8ed);
       background: var(--tg-theme-secondary-bg-color, #f2f2f7); font-size: 12px; font-weight: 600;
       color: var(--tg-theme-text-color, #1a1a2e); cursor: pointer; transition: all .15s;
+      display: inline-flex; align-items: center; gap: 6px;
     }
     .method-btn:hover { border-color: #8b5cf6; }
     .method-btn.selected { background: #8b5cf6; color: #fff; border-color: #8b5cf6; }
@@ -61,6 +61,7 @@
       width: 100%; padding: 16px; border-radius: 14px; border: none; background: linear-gradient(135deg, #8b5cf6, #6366f1);
       color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; transition: opacity .15s, transform .1s;
       box-shadow: 0 4px 18px rgba(139,92,246,.3); letter-spacing: -0.2px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
     }
     .primary-btn:active { transform: scale(.98); }
     .primary-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
@@ -68,27 +69,37 @@
     .payment-card {
       background: var(--tg-theme-secondary-bg-color, #f2f2f7); border-radius: 18px; padding: 22px; margin-top: 20px;
     }
-    .payment-card .method-label { font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: .5px; color: var(--tg-theme-hint-color, #8e8e93); margin-bottom: 8px; }
+    .payment-card .method-label { font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: .5px; color: var(--tg-theme-hint-color, #8e8e93); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
     .payment-card .total { font-size: 28px; font-weight: 800; margin-bottom: 16px; letter-spacing: -0.5px; }
 
     .qr-wrapper { display: flex; justify-content: center; margin: 16px 0; }
     .qr-wrapper img { border-radius: 14px; background: #fff; padding: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.06); width: 200px; height: 200px; }
 
-    .expiry { font-size: 11px; color: var(--tg-theme-hint-color, #8e8e93); text-align: center; margin-top: 12px; }
+    .expiry { font-size: 11px; color: var(--tg-theme-hint-color, #8e8e93); text-align: center; margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 4px; }
 
     .error-msg { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 12px 16px; border-radius: 12px; font-size: 13px; margin-top: 12px; }
     .hidden { display: none !important; }
     .spinner { display: inline-block; width: 20px; height: 20px; border: 2.5px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    i.icon-sm svg { width: 16px; height: 16px; }
-    i.icon-xs svg { width: 13px; height: 13px; }
-    .method-btn i svg, .primary-btn i svg { width: 15px; height: 15px; vertical-align: -3px; }
+
+    .btn-secondary {
+      width: 100%; padding: 16px; border-radius: 14px; border: 1.5px solid var(--tg-theme-destructive-text-color, #ef4444);
+      background: transparent; color: var(--tg-theme-destructive-text-color, #ef4444); font-size: 15px; font-weight: 700;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px;
+    }
+
+    svg.icon-16 { width: 16px; height: 16px; flex-shrink: 0; }
+    svg.icon-13 { width: 13px; height: 13px; flex-shrink: 0; }
+    svg.icon-42 { width: 42px; height: 42px; flex-shrink: 0; color: #fff; }
   </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
-    <h1><i data-lucide="zap" class="icon-sm"></i> Top-Up Saldo</h1>
+    <h1>
+      <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      Top-Up Saldo
+    </h1>
     <p>Isi saldo untuk kirim pesan anonim</p>
   </div>
 
@@ -115,7 +126,10 @@
     <div class="section">
       <div class="section-title">Metode Pembayaran</div>
       <div class="method-list" id="methodList">
-        <button class="method-btn selected" data-method="qris"><i data-lucide="qr-code" class="icon-sm"></i> QRIS</button>
+        <button class="method-btn selected" data-method="qris">
+          <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/><rect x="2" y="14" width="8" height="8" rx="1"/><line x1="14" y1="18" x2="14" y2="14"/><line x1="18" y1="18" x2="14" y2="14"/><line x1="14" y1="14" x2="18" y2="14"/><line x1="14" y1="22" x2="14" y2="18"/></svg>
+          QRIS
+        </button>
       </div>
     </div>
 
@@ -134,18 +148,29 @@
       </div>
       <div class="expiry" id="expiryInfo"></div>
     </div>
-    <button class="primary-btn" style="margin-top:16px; background: var(--tg-theme-secondary-bg-color, #f2f2f7); color: var(--tg-theme-text-color, #1a1a2e); box-shadow:none;" onclick="resetForm()"><i data-lucide="arrow-left" class="icon-sm"></i> Top-Up Lagi</button>
-    <button class="primary-btn" style="margin-top:8px; background: transparent; color: var(--tg-theme-destructive-text-color, #ef4444); box-shadow:none; border: 1.5px solid var(--tg-theme-destructive-text-color, #ef4444);" id="cancelBtn" onclick="cancelPayment()"><i data-lucide="x-circle" class="icon-sm"></i> Batalkan</button>
+    <button class="primary-btn" style="margin-top:16px; background: var(--tg-theme-secondary-bg-color, #f2f2f7); color: var(--tg-theme-text-color, #1a1a2e); box-shadow:none;" onclick="resetForm()">
+      <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      Top-Up Lagi
+    </button>
+    <button class="btn-secondary" id="cancelBtn" onclick="cancelPayment()">
+      <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      Batalkan
+    </button>
   </div>
 
   <div id="successStep" class="hidden">
     <div class="payment-card" style="text-align: center;">
-      <div style="width: 72px; height: 72px; border-radius: 50%; background: linear-gradient(135deg, #10b981, #34d399); margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;"><i data-lucide="check-circle" style="width: 42px; height: 42px; color: #fff;"></i></div>
+      <div style="width: 72px; height: 72px; border-radius: 50%; background: linear-gradient(135deg, #10b981, #34d399); margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
+        <svg class="icon-42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      </div>
       <div style="font-size: 22px; font-weight: 800; margin-bottom: 4px;">Pembayaran Berhasil!</div>
       <div style="font-size: 13px; color: var(--tg-theme-hint-color, #8e8e93); margin-bottom: 16px;">Saldo otomatis bertambah</div>
       <div style="font-size: 28px; font-weight: 800; color: #8b5cf6;" id="successAmount">Rp0</div>
     </div>
-    <button class="primary-btn" style="margin-top:16px;" onclick="resetForm()"><i data-lucide="arrow-left" class="icon-sm"></i> Top-Up Lagi</button>
+    <button class="primary-btn" style="margin-top:16px;" onclick="resetForm()">
+      <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      Top-Up Lagi
+    </button>
     <button class="primary-btn" style="margin-top:8px; background: var(--tg-theme-secondary-bg-color, #f2f2f7); color: var(--tg-theme-text-color, #1a1a2e); box-shadow:none;" onclick="if(tg)tg.close()">Tutup</button>
   </div>
 
@@ -168,7 +193,6 @@ if (tg) {
   tg.expand();
   tgUser = tg.initDataUnsafe?.user;
 }
-lucide.createIcons();
 
 async function loadBalance() {
   try {
@@ -184,7 +208,6 @@ async function loadBalance() {
 }
 loadBalance();
 
-// Amount selection
 document.querySelectorAll('.amount-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('selected'));
@@ -201,16 +224,6 @@ document.getElementById('customAmount').addEventListener('input', e => {
   document.getElementById('errorMsg').classList.add('hidden');
 });
 
-// Method selection
-document.querySelectorAll('.method-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    selectedMethod = btn.dataset.method;
-  });
-});
-
-// Pay button
 document.getElementById('payBtn').addEventListener('click', async () => {
   const customVal = parseInt(document.getElementById('customAmount').value);
   if (customVal >= 1000) selectedAmount = customVal;
@@ -236,7 +249,6 @@ document.getElementById('payBtn').addEventListener('click', async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Gagal membuat transaksi');
 
-    // Show payment step
     document.getElementById('formStep').classList.add('hidden');
     document.getElementById('paymentStep').classList.remove('hidden');
 
@@ -246,10 +258,9 @@ document.getElementById('payBtn').addEventListener('click', async () => {
 
     if (data.expired_at) {
       const exp = new Date(data.expired_at).toLocaleString('id-ID', { hour:'2-digit', minute:'2-digit', day:'numeric', month:'short' });
-      document.getElementById('expiryInfo').innerHTML = '<i data-lucide="clock" class="icon-xs"></i> Bayar sebelum ' + exp;
+      document.getElementById('expiryInfo').innerHTML = `<svg class="icon-13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Bayar sebelum ${exp}`;
     }
 
-    lucide.createIcons();
     startPolling(data.order_id, data.amount);
   } catch(e) {
     showError(e.message);
@@ -278,7 +289,6 @@ function startPolling(orderId, amount) {
         document.getElementById('pendingStep').classList.add('hidden');
         document.getElementById('successStep').classList.remove('hidden');
         document.getElementById('successAmount').textContent = 'Rp' + amount.toLocaleString('id-ID');
-        lucide.createIcons();
       }
     } catch(e) {}
     if (tries >= maxTries) {
@@ -324,7 +334,6 @@ function resetForm() {
   document.getElementById('payBtnText').textContent = 'Lanjutkan Pembayaran';
   document.getElementById('errorMsg').classList.add('hidden');
   loadBalance();
-  lucide.createIcons();
 }
 </script>
 </body>

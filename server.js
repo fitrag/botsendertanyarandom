@@ -75,7 +75,7 @@ async function main() {
         });
       } catch(e) { /* still mark as cancelled locally */ }
     }
-    db.run("UPDATE topup_transactions SET status = 'cancelled' WHERE order_id = ?", [order_id]);
+    db.cancelTopupTransaction(order_id);
     console.log(`[Cancel] Transaction cancelled: ${order_id}`);
     res.json({ success: true });
   });
