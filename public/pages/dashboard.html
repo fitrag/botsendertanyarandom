@@ -40,10 +40,6 @@
         <button data-page="settings" class="nav-item group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800/60 transition-colors">
           <i data-lucide="settings" class="w-[18px] h-[18px]"></i> Pengaturan
         </button>
-        <button data-page="withdrawals" class="nav-item group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800/60 transition-colors">
-          <i data-lucide="wallet" class="w-[18px] h-[18px]"></i> Withdraw
-          <span id="wdPendingBadge" class="hidden ml-auto text-[10px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded-full">0</span>
-        </button>
       </nav>
       <div class="px-3 py-3 border-t border-slate-100 dark:border-zinc-800/60">
         <button id="logoutBtn" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium text-slate-400 dark:text-zinc-500 hover:text-rose-500 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-zinc-800/60 transition-colors">
@@ -101,6 +97,12 @@
               <button data-status="approved" class="filter-tab px-3 py-1.5 rounded-lg font-medium transition-colors text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200">Approved</button>
               <button data-status="rejected" class="filter-tab px-3 py-1.5 rounded-lg font-medium transition-colors text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200">Rejected</button>
             </div>
+            <select id="msgPerPage" class="px-3 py-2 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/60 rounded-xl text-[11px] font-medium text-slate-600 dark:text-zinc-400 outline-none focus:border-violet-500 shadow-sm dark:shadow-none transition cursor-pointer">
+              <option value="15">15 / halaman</option>
+              <option value="30">30 / halaman</option>
+              <option value="50">50 / halaman</option>
+              <option value="100">100 / halaman</option>
+            </select>
             <div class="relative flex-1 w-full sm:w-auto">
               <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-zinc-500"></i>
               <input id="msgSearch" type="text" placeholder="Cari pesan..."
@@ -118,12 +120,17 @@
 
         <!-- USERS -->
         <section id="usersPage" class="page">
-          <div class="mb-5">
-            <div class="relative max-w-sm">
+          <div class="mb-5 flex items-center gap-3">
+            <div class="relative max-w-sm flex-1">
               <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-zinc-500"></i>
               <input id="userSearch" type="text" placeholder="Cari pengguna..."
                 class="w-full pl-9 pr-3 py-2 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/60 rounded-xl text-xs text-slate-800 dark:text-zinc-200 placeholder-slate-400 dark:placeholder-zinc-500 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 shadow-sm dark:shadow-none transition">
             </div>
+            <select id="userPerPage" class="px-3 py-2 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/60 rounded-xl text-[11px] font-medium text-slate-600 dark:text-zinc-400 outline-none focus:border-violet-500 shadow-sm dark:shadow-none transition cursor-pointer">
+              <option value="20">20 / halaman</option>
+              <option value="50">50 / halaman</option>
+              <option value="100">100 / halaman</option>
+            </select>
           </div>
           <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/60 rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
             <div class="overflow-x-auto">
@@ -169,11 +176,6 @@
                   <div><label class="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Auto Post ke Channel</label><div class="text-[9px] text-slate-400 dark:text-zinc-600">Semua pesan langsung terbit tanpa review admin</div></div>
                   <label class="sw"><input type="checkbox" id="set_auto_post"><div class="sw-track"><div class="sw-dot"></div></div></label>
                 </div>
-                <div class="flex items-center justify-between pt-1">
-                  <label class="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Aktifkan Hashtag</label>
-                  <label class="sw"><input type="checkbox" id="set_hashtag_enabled"><div class="sw-track"><div class="sw-dot"></div></div></label>
-                </div>
-                <div><label class="block text-[11px] font-medium text-slate-500 dark:text-zinc-400 mb-1">Teks Hashtag</label><input id="set_hashtag_text" class="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60 rounded-xl text-xs text-slate-800 dark:text-zinc-200 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition" placeholder="#TanyaRandom"></div>
               </div>
             </div>
 
@@ -181,13 +183,26 @@
             <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/60 rounded-2xl p-5 shadow-sm dark:shadow-none">
               <h3 class="text-sm font-semibold mb-4 flex items-center gap-2"><i data-lucide="sliders-horizontal" class="w-4 h-4 text-violet-500"></i> Sistem</h3>
               <div class="space-y-3">
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 gap-3">
                   <div><label class="block text-[11px] font-medium text-slate-500 dark:text-zinc-400 mb-1">Rate Limit</label><input type="number" id="set_rate_limit" min="1" max="60" class="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60 rounded-xl text-xs text-slate-800 dark:text-zinc-200 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition"></div>
-                  <div><label class="block text-[11px] font-medium text-slate-500 dark:text-zinc-400 mb-1">Port Server</label><input type="number" id="set_port" min="1" max="65535" class="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60 rounded-xl text-xs text-slate-800 dark:text-zinc-200 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition"></div>
                 </div>
                 <div class="flex items-center justify-between"><label class="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Mode Maintenance</label><label class="sw"><input type="checkbox" id="set_maintenance_mode"><div class="sw-track"><div class="sw-dot"></div></div></label></div>
                 <div class="flex items-center justify-between"><label class="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Notifikasi Admin</label><label class="sw"><input type="checkbox" id="set_notify_admin"><div class="sw-track"><div class="sw-dot"></div></div></label></div>
                 <div class="flex items-center justify-between"><label class="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Notifikasi Komentar ke User</label><label class="sw"><input type="checkbox" id="set_notify_comments"><div class="sw-track"><div class="sw-dot"></div></div></label></div>
+                <div class="flex items-center justify-between"><label class="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Pesan Berbayar</label><label class="sw"><input type="checkbox" id="set_paid_message_enabled"><div class="sw-track"><div class="sw-dot"></div></div></label></div>
+                <div><label class="block text-[11px] font-medium text-slate-500 dark:text-zinc-400 mb-1">Biaya per Pesan (Rp)</label><input type="number" id="set_message_cost" min="0" class="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60 rounded-xl text-xs text-slate-800 dark:text-zinc-200 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition" placeholder="5000"></div>
+              </div>
+            </div>
+
+            <!-- Pakasir -->
+            <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/60 rounded-2xl p-5 shadow-sm dark:shadow-none">
+              <h3 class="text-sm font-semibold mb-4 flex items-center gap-2"><i data-lucide="credit-card" class="w-4 h-4 text-violet-500"></i> Pembayaran Pakasir</h3>
+              <div class="space-y-3">
+                <div><label class="block text-[11px] font-medium text-slate-500 dark:text-zinc-400 mb-1">Pakasir Slug (Nama Proyek)</label><input id="set_pakasir_slug" class="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60 rounded-xl text-xs text-slate-800 dark:text-zinc-200 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition" placeholder="slug-proyek-anda"></div>
+                <div><label class="block text-[11px] font-medium text-slate-500 dark:text-zinc-400 mb-1">Pakasir API Key</label><input id="set_pakasir_api_key" type="password" class="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60 rounded-xl text-xs text-slate-800 dark:text-zinc-200 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition" placeholder="api-key-anda"></div>
+                <div class="text-[9px] text-slate-400 dark:text-zinc-600">
+                  Webhook URL: <code class="bg-slate-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-[10px]">https://domain-anda.com/api/pakasir/webhook</code>
+                </div>
               </div>
             </div>
 
@@ -207,18 +222,10 @@
               <div class="space-y-3">
                 <div class="flex items-center justify-between"><label class="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Aktifkan Referral</label><label class="sw"><input type="checkbox" id="set_referral_enabled"><div class="sw-track"><div class="sw-dot"></div></div></label></div>
                 <div>
-                  <label class="block text-[11px] font-medium text-slate-500 dark:text-zinc-400 mb-1">Jenis Hadiah</label>
-                  <select id="set_referral_reward_type" class="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60 rounded-xl text-xs text-slate-800 dark:text-zinc-200 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition">
-                    <option value="vip">⭐ Member VIP</option>
-                    <option value="cash">💰 Uang Tunai</option>
-                  </select>
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                  <div><label class="block text-[11px] font-medium text-slate-500 dark:text-zinc-400 mb-1">Jumlah Uang (Rp)</label><input type="number" id="set_referral_cash_amount" min="1000" class="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60 rounded-xl text-xs text-slate-800 dark:text-zinc-200 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition" placeholder="10000"></div>
-                  <div><label class="block text-[11px] font-medium text-slate-500 dark:text-zinc-400 mb-1">Durasi VIP (hari)</label><input type="number" id="set_referral_vip_days" min="1" class="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60 rounded-xl text-xs text-slate-800 dark:text-zinc-200 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition" placeholder="7"></div>
+                  <label class="block text-[11px] font-medium text-slate-500 dark:text-zinc-400 mb-1">Hadiah Saldo (Rp)</label>
+                  <input type="number" id="set_referral_cash_amount" min="1000" class="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60 rounded-xl text-xs text-slate-800 dark:text-zinc-200 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition" placeholder="10000">
                 </div>
                 <div><label class="block text-[11px] font-medium text-slate-500 dark:text-zinc-400 mb-1">Minimum Referral untuk Hadiah</label><input type="number" id="set_referral_min_referrals" min="1" class="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60 rounded-xl text-xs text-slate-800 dark:text-zinc-200 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition" placeholder="1"></div>
-                <div><label class="block text-[11px] font-medium text-slate-500 dark:text-zinc-400 mb-1">Minimum Withdraw (Rp)</label><input type="number" id="set_referral_min_withdraw" min="1000" class="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60 rounded-xl text-xs text-slate-800 dark:text-zinc-200 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition" placeholder="50000"></div>
               </div>
             </div>
 
@@ -228,18 +235,9 @@
               </button>
             </div>
           </div>
-        </section>
+</section>
 
-        <!-- WITHDRAWALS PAGE -->
-        <section id="withdrawalsPage" class="page space-y-5">
-          <div class="flex items-center justify-between">
-            <h2 class="text-base font-bold">💸 Withdraw Requests</h2>
-            <div class="flex gap-1.5">
-              <button onclick="wdFilter=''   ;loadWithdrawals()" class="wd-tab px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors border border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800">Semua</button>
-              <button onclick="wdFilter='pending';loadWithdrawals()" class="wd-tab px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors border border-amber-300 dark:border-amber-600 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10">Pending</button>
-              <button onclick="wdFilter='approved';loadWithdrawals()" class="wd-tab px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors border border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800">Approved</button>
-              <button onclick="wdFilter='rejected';loadWithdrawals()" class="wd-tab px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors border border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800">Rejected</button>
-            </div>
+      </div>
           </div>
           <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/60 rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
             <table class="w-full text-left">

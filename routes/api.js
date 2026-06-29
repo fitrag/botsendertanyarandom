@@ -1,5 +1,4 @@
 const express = require('express');
-const https = require('https');
 const bcrypt = require('bcryptjs');
 const db = require('../database/db');
 const { postToChannel, notifyUser, getBot, deleteFromChannel } = require('../bot/bot');
@@ -110,49 +109,32 @@ router.post('/users/:id/vip', (req, res) => {
 });
 router.post('/users/:id/unvip', (req, res) => { db.unsetVip(req.params.id); res.json({ success: true }); });
 
+router.post('/users/:id/topup', (req, res) => {
+  const { amount } = req.body || {};
+  if (!amount || amount < 1) return res.status(400).json({ error: 'Jumlah top-up diperlukan' });
+  const user = db.getUserById(req.params.id);
+  if (!user) return res.status(404).json({ error: 'User tidak ditemukan' });
+  db.addBalance(user.telegram_id, Number(amount));
+  const newBalance = db.getTotalBalance(user.telegram_id);
+  // Notify user via bot
+  try {
+    const bot = require('../bot/bot').getBot();
+    if (bot && user.telegram_id) {
+      bot.sendMessage(user.telegram_id,
+        `💰 *Top-Up Berhasil!*\n\n+ Rp${Number(amount).toLocaleString('id-ID')} ditambahkan ke saldomu\n💳 Saldo saat ini: *Rp${newBalance.toLocaleString('id-ID')}*\n\nSekarang kamu bisa kirim pesan! ✏️`,
+        { parse_mode: 'Markdown' }
+      ).catch(() => {});
+    }
+  } catch (e) { }
+  res.json({ success: true, newBalance });
+});
+
 // Referrals
 router.get('/referrals', (req, res) => {
   const { page = 1, limit = 20 } = req.query;
   res.json(db.getAllReferrals(+page, +limit));
 });
 router.get('/referrals/stats', (req, res) => { res.json(db.getReferralStats()); });
-
-// Withdrawals
-router.get('/withdrawals', (req, res) => {
-  const { page = 1, limit = 20, status = '' } = req.query;
-  res.json(db.getAllWithdrawals(+page, +limit, status));
-});
-router.post('/withdrawals/:id/approve', (req, res) => {
-  const w = db.approveWithdrawal(req.params.id, req.body.note);
-  if (!w) return res.status(400).json({ error: 'Tidak dapat diproses' });
-  // Notify user via bot
-  try {
-    const bot = require('../bot/bot').getBot();
-    if (bot && w.telegram_id) {
-      bot.sendMessage(w.telegram_id,
-        `✅ *Withdraw Disetujui!*\n\n💰 Jumlah: *Rp${w.amount.toLocaleString('id-ID')}*\n💳 ${w.payment_method}: ${w.payment_info}\n${req.body.note ? `📝 Catatan: ${req.body.note}` : ''}\n\nDana akan segera ditransfer.`,
-        { parse_mode: 'Markdown' }
-      ).catch(() => {});
-    }
-  } catch(e) {}
-  res.json({ success: true });
-});
-router.post('/withdrawals/:id/reject', (req, res) => {
-  const w = db.rejectWithdrawal(req.params.id, req.body.note);
-  if (!w) return res.status(400).json({ error: 'Tidak dapat diproses' });
-  // Notify user + refund balance
-  db.addReferralBalance(w.telegram_id, w.amount);
-  try {
-    const bot = require('../bot/bot').getBot();
-    if (bot && w.telegram_id) {
-      bot.sendMessage(w.telegram_id,
-        `❌ *Withdraw Ditolak*\n\n💰 Jumlah: *Rp${w.amount.toLocaleString('id-ID')}*\n${req.body.note ? `📝 Alasan: ${req.body.note}` : ''}\n\nSaldo telah dikembalikan ke akunmu.`,
-        { parse_mode: 'Markdown' }
-      ).catch(() => {});
-    }
-  } catch(e) {}
-  res.json({ success: true });
-});
 
 // Settings
 router.get('/settings', (req, res) => res.json(db.getAllSettings()));
@@ -169,20 +151,6 @@ router.post('/change-password', (req, res) => {
     return res.status(400).json({ error: 'Password saat ini salah' });
   db.updateAdminPassword(admin.id, bcrypt.hashSync(newPassword, 10));
   res.json({ success: true });
-});
-
-// Photo proxy
-router.get('/photo/:fileId', async (req, res) => {
-  try {
-    const b = getBot();
-    const file = await b.getFile(req.params.fileId);
-    const url = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${file.file_path}`;
-    https.get(url, (stream) => {
-      res.set('Content-Type', stream.headers['content-type'] || 'image/jpeg');
-      res.set('Cache-Control', 'public, max-age=86400');
-      stream.pipe(res);
-    });
-  } catch (e) { res.status(404).json({ error: 'Photo not found' }); }
 });
 
 module.exports = router;

@@ -3,7 +3,6 @@ const db = require('../database/db');
 
 let bot;
 const rateLimitMap = new Map();
-const withdrawState = new Map();
 
 function initBot(token) {
   bot = new TelegramBot(token, { polling: true });
@@ -16,13 +15,12 @@ function initBot(token) {
       bot.sendMessage(chatId, customWelcome.replace(/\\n/g, '\n'));
       return;
     }
-    const welcome = `Halo *${name}*! 👋\n\nSelamat datang di *Bot Pesan Anonim*.\nBot ini memungkinkan kamu mengirim pesan secara anonim ke channel kami.\n\n` +
+    const welcome = `Halo *${name}*! 👋\n\nSelamat datang di *Bot Pesan Anonim*.\nBot ini memungkinkan kamu mengirim pesan teks secara anonim ke channel kami.\n\n` +
       `━━━━━━━━━━━━━━━━━\n` +
       `📝 *Cara Mengirim Pesan:*\n\n` +
       `1️⃣ Ketik pesan teksmu langsung di chat ini\n` +
-      `2️⃣ Atau kirim foto (bisa tambahkan caption)\n` +
-      `3️⃣ Pesan akan direview oleh admin\n` +
-      `4️⃣ Jika disetujui, pesan terbit di channel!\n` +
+      `2️⃣ Pesan akan direview oleh admin\n` +
+      `3️⃣ Jika disetujui, pesan terbit di channel!\n` +
       `━━━━━━━━━━━━━━━━━\n\n` +
       `✏️ *Silakan ketik pesanmu sekarang...*`;
     bot.sendMessage(chatId, welcome, {
@@ -44,7 +42,6 @@ function initBot(token) {
     }
     const help = `📖 *Panduan Penggunaan Bot*\n\n` +
       `🔹 *Mengirim Pesan Teks*\nCukup ketik pesanmu langsung di chat ini. Tidak perlu perintah khusus!\n\n` +
-      `🔹 *Mengirim Foto*\nKirim foto langsung, bisa tambahkan caption sebagai keterangan.\n\n` +
       `🔹 *Cek Status Kiriman*\nKetik /status untuk melihat apakah pesanmu sudah disetujui.\n\n` +
       `━━━━━━━━━━━━━━━━━\n\n` +
       `⚠️ *Peraturan:*\n• Jangan kirim spam atau pesan berulang\n• Konten harus sopan dan sesuai aturan\n• Admin berhak menolak pesan yang tidak sesuai\n\n` +
@@ -67,6 +64,42 @@ function initBot(token) {
     });
     text += `━━━━━━━━━━━━━━━━━\n✏️ Kirim pesan baru kapan saja!`;
     bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+  }
+
+  function createTopupPayment(chatId, tgId, amount, slug) {
+    const orderId = `TOPDUP-${tgId}-${Date.now()}`;
+    db.createTopupTransaction(tgId, amount, orderId);
+    const payUrl = `https://app.pakasir.com/pay/${slug}/${amount}?order_id=${encodeURIComponent(orderId)}&qris_only=1`;
+    bot.sendMessage(chatId,
+      `💳 *Top-Up Rp${amount.toLocaleString('id-ID')}*\n\n` +
+      `🔢 ID: \`${orderId}\`\n\n` +
+      `Klik tombol di bawah untuk membayar via *Pakasir* (QRIS & Virtual Account):`,
+      {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '💳 Bayar via Pakasir', url: payUrl }]
+          ]
+        }
+      }
+    );
+  }
+
+  function askGender(chatId) {
+    bot.sendMessage(chatId,
+      `👤 *Pilih Jenis Kelamin*\n\nSilakan pilih jenis kelamin kamu. Ini akan digunakan untuk memberi tag pada pesanmu di channel.`,
+      {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '👨 Laki-laki', callback_data: 'set_gender_laki' },
+              { text: '👩 Perempuan', callback_data: 'set_gender_perempuan' }
+            ]
+          ]
+        }
+      }
+    );
   }
 
   // ===== INLINE BUTTON HANDLER =====
@@ -140,54 +173,20 @@ function initBot(token) {
       sendStatus(chatId, query.from.id);
     } else if (data === 'show_help') {
       sendHelp(chatId);
-    } else if (data === 'wd_cancel') {
-      withdrawState.delete(fromId);
-      bot.sendMessage(chatId, '❌ Withdraw dibatalkan.', { parse_mode: 'Markdown' });
-    } else if (data === 'wd_bank' || data === 'wd_ewallet') {
-      const state = withdrawState.get(fromId);
-      if (!state || state.step !== 'method') return;
-      const method = data === 'wd_bank' ? 'Bank Transfer' : 'E-Wallet';
-      withdrawState.set(fromId, { ...state, step: 'info', method });
-      const prompt = data === 'wd_bank'
-        ? `🏦 *Transfer Bank*\n\nKirim info rekening dengan format:\n\`Nama Bank - No Rekening - Atas Nama\`\n\n_Contoh: BCA - 1234567890 - John Doe_`
-        : `💳 *E-Wallet*\n\nKirim info e-wallet dengan format:\n\`Nama E-Wallet - Nomor - Atas Nama\`\n\n_Contoh: GoPay - 08123456789 - John Doe_`;
-      bot.sendMessage(chatId, prompt, { parse_mode: 'Markdown' });
-    } else if (data === 'wd_confirm') {
-      const state = withdrawState.get(fromId);
-      if (!state || state.step !== 'confirm') return;
-      // Check balance again
-      const currentBalance = db.getUserBalance(query.from.id);
-      if (currentBalance < state.balance) {
-        bot.sendMessage(chatId, `❌ Saldo berubah. Silakan coba lagi dengan /withdraw`, { parse_mode: 'Markdown' });
-        withdrawState.delete(fromId);
+    } else if (data === 'set_gender_laki') {
+      db.setGender(query.from.id, 'male');
+      bot.sendMessage(chatId, `✅ Jenis kelamin disimpan: *Laki-laki* 🧑\n\nSekarang kamu bisa kirim pesan! Ketik langsung di sini.`, { parse_mode: 'Markdown' });
+    } else if (data === 'set_gender_perempuan') {
+      db.setGender(query.from.id, 'female');
+      bot.sendMessage(chatId, `✅ Jenis kelamin disimpan: *Perempuan* 👩\n\nSekarang kamu bisa kirim pesan! Ketik langsung di sini.`, { parse_mode: 'Markdown' });
+    } else if (data.startsWith('topup_')) {
+      const amount = parseInt(data.replace('topup_', ''));
+      const slug = db.getSetting('pakasir_slug');
+      if (!slug) {
+        bot.sendMessage(chatId, '❌ Fitur top-up belum dikonfigurasi.', { parse_mode: 'Markdown' });
         return;
       }
-      const wdId = db.createWithdrawal(query.from.id, state.balance, state.method, state.info);
-      withdrawState.delete(fromId);
-      bot.sendMessage(chatId,
-        `✅ *Withdraw Request Terkirim!*\n\n` +
-        `🔢 ID: \`#WD${wdId}\`\n` +
-        `💰 Jumlah: *Rp${state.balance.toLocaleString('id-ID')}*\n` +
-        `💳 Metode: ${state.method}\n` +
-        `📋 Info: ${state.info}\n\n` +
-        `⏳ Tunggu admin memproses withdrawmu.`,
-        { parse_mode: 'Markdown' }
-      );
-      // Notify admin
-      const adminId = process.env.ADMIN_TELEGRAM_ID;
-      if (adminId) {
-        const name = query.from.first_name || query.from.username || fromId;
-        bot.sendMessage(adminId,
-          `💸 *Withdraw Request Baru!*\n\n` +
-          `🔢 ID: \`#WD${wdId}\`\n` +
-          `👤 Dari: ${name}\n` +
-          `💰 Jumlah: *Rp${state.balance.toLocaleString('id-ID')}*\n` +
-          `💳 Metode: ${state.method}\n` +
-          `📋 Info: ${state.info}\n\n` +
-          `_Buka dashboard untuk proses._`,
-          { parse_mode: 'Markdown' }
-        ).catch(() => {});
-      }
+      createTopupPayment(chatId, query.from.id, amount, slug);
     }
   });
 
@@ -198,33 +197,6 @@ function initBot(token) {
 
     const chatId = msg.chat.id;
     const from = msg.from;
-
-    // ── WITHDRAW FLOW INPUT ──
-    if (msg.text && !msg.text.startsWith('/')) {
-      const state = withdrawState.get(String(from.id));
-      if (state && state.step === 'info') {
-        const info = msg.text.trim();
-        if (!info || info.length < 5) {
-          bot.sendMessage(chatId, '⚠️ Info pembayaran terlalu pendek. Coba lagi:', { parse_mode: 'Markdown' });
-          return;
-        }
-        withdrawState.set(String(from.id), { ...state, step: 'confirm', info });
-        bot.sendMessage(chatId,
-          `📋 *Konfirmasi Withdraw*\n\n` +
-          `💰 Jumlah: *Rp${state.balance.toLocaleString('id-ID')}*\n` +
-          `💳 Metode: ${state.method}\n` +
-          `📋 Info: ${info}\n\n` +
-          `Apakah data sudah benar?`,
-          {
-            parse_mode: 'Markdown',
-            reply_markup: { inline_keyboard: [
-              [{ text: '✅ Konfirmasi', callback_data: 'wd_confirm' }, { text: '❌ Batal', callback_data: 'wd_cancel' }]
-            ]}
-          }
-        );
-        return;
-      }
-    }
 
     // ── COMMAND ROUTING ──
     if (msg.text && msg.text.startsWith('/')) {
@@ -251,6 +223,11 @@ function initBot(token) {
           }
         }
         sendWelcome(chatId, from);
+        // Prompt gender if not set
+        const startedUser = db.getUser(from.id);
+        if (!startedUser || !startedUser.gender) {
+          setTimeout(() => askGender(chatId), 600);
+        }
       } else if (cmd === '/help') {
         sendHelp(chatId);
       } else if (cmd === '/status') {
@@ -263,14 +240,11 @@ function initBot(token) {
           const refLink = `https://t.me/${botInfo.username}?start=ref_${from.id}`;
           const refCount = db.getReferralCount(from.id);
           const minRef = parseInt(db.getSetting('referral_min_referrals') || '1');
-          const rewardType = db.getSetting('referral_reward_type') || 'vip';
-          const rewardText = rewardType === 'cash'
-            ? `💰 Rp${parseInt(db.getSetting('referral_cash_amount') || '10000').toLocaleString('id-ID')}`
-            : `⭐ VIP ${db.getSetting('referral_vip_days') || '7'} hari`;
+          const cashAmount = parseInt(db.getSetting('referral_cash_amount') || '10000');
           bot.sendMessage(chatId,
             `🔗 *Program Referral*\n\n` +
             `Ajak temanmu bergabung dan dapatkan hadiah!\n\n` +
-            `🎁 Hadiah: *${rewardText}*\n` +
+            `🎁 Hadiah: *Rp${cashAmount.toLocaleString('id-ID')}* saldo\n` +
             `👥 Minimum undangan: *${minRef} orang*\n` +
             `📊 Referralmu saat ini: *${refCount}*\n\n` +
             `📎 Link referralmu:\n\`${refLink}\`\n\n` +
@@ -278,35 +252,47 @@ function initBot(token) {
             { parse_mode: 'Markdown' }
           );
         }
-      } else if (cmd === '/withdraw') {
-        const balance = db.getUserBalance(from.id);
-        const minWithdraw = parseInt(db.getSetting('referral_min_withdraw') || '50000');
-        if (balance <= 0) {
-          bot.sendMessage(chatId, `💳 *Saldo Referral*\n\nSaldomu saat ini: *Rp0*\n\nAjak temanmu bergabung untuk mendapat saldo! 🔗 /referral`, { parse_mode: 'Markdown' });
-        } else if (balance < minWithdraw) {
-          bot.sendMessage(chatId,
-            `💳 *Saldo Referral*\n\n` +
-            `💰 Saldo: *Rp${balance.toLocaleString('id-ID')}*\n` +
-            `📌 Minimum withdraw: *Rp${minWithdraw.toLocaleString('id-ID')}*\n\n` +
-            `❌ Saldomu belum mencukupi untuk withdraw.\nTerus ajak temanmu! 🔗 /referral`,
-            { parse_mode: 'Markdown' }
-          );
+      } else if (cmd === '/balance') {
+        const totalBalance = db.getTotalBalance(from.id);
+        const isPaid = db.getSetting('paid_message_enabled') === 'true';
+        const messageCost = parseInt(db.getSetting('message_cost') || '5000');
+        bot.sendMessage(chatId,
+          `💰 *Saldo Kamu*\n\n` +
+          `Saldo: *Rp${totalBalance.toLocaleString('id-ID')}*\n` +
+          (isPaid ? `Biaya kirim pesan: *Rp${messageCost.toLocaleString('id-ID')}*\nBisa kirim: *${Math.floor(totalBalance / messageCost)} pesan*\n` : `Kirim pesan: *GRATIS* 🎉\n`) +
+          `\n📌 Cara isi saldo:\n• 🎁 /referral — Ajak teman dapat saldo\n• 💳 /topup — Top-up via Pakasir`,
+          { parse_mode: 'Markdown' }
+        );
+      } else if (cmd === '/topup') {
+        const slug = db.getSetting('pakasir_slug');
+        if (!slug) {
+          bot.sendMessage(chatId, `💳 *Top-Up Saldo*\n\nFitur top-up online belum dikonfigurasi oleh admin.\n\n📲 Silakan hubungi admin untuk top-up manual.`, { parse_mode: 'Markdown' });
         } else {
-          // Start withdraw flow
-          withdrawState.set(String(from.id), { step: 'method', balance });
-          bot.sendMessage(chatId,
-            `💳 *Withdraw Saldo Referral*\n\n` +
-            `💰 Saldo: *Rp${balance.toLocaleString('id-ID')}*\n` +
-            `📌 Minimum: *Rp${minWithdraw.toLocaleString('id-ID')}*\n\n` +
-            `Pilih metode pembayaran:`,
-            {
-              parse_mode: 'Markdown',
-              reply_markup: { inline_keyboard: [
-                [{ text: '🏦 Transfer Bank', callback_data: 'wd_bank' }, { text: '💳 E-Wallet', callback_data: 'wd_ewallet' }],
-                [{ text: '❌ Batal', callback_data: 'wd_cancel' }]
-              ]}
-            }
-          );
+          const args2 = msg.text.split(' ');
+          if (args2[1] && /^\d+$/.test(args2[1]) && parseInt(args2[1]) >= 1000) {
+            const customAmount = parseInt(args2[1]);
+            createTopupPayment(chatId, from.id, customAmount, slug);
+          } else {
+            const miniAppUrl = process.env.WEBAPP_URL || '';
+            const keyboard = [];
+            if (miniAppUrl) keyboard.push([{ text: '📱 Buka Aplikasi Top-Up', web_app: { url: miniAppUrl + '/topup' } }]);
+            keyboard.push(
+              [{ text: '💰 Rp10.000', callback_data: 'topup_10000' }],
+              [{ text: '💰 Rp25.000', callback_data: 'topup_25000' }],
+              [{ text: '💰 Rp50.000', callback_data: 'topup_50000' }],
+              [{ text: '💰 Rp100.000', callback_data: 'topup_100000' }]
+            );
+            bot.sendMessage(chatId,
+              `💳 *Top-Up Saldo via Pakasir*\n\n` +
+              (miniAppUrl ? `📱 *Rekomendasi:* Gunakan aplikasi top-up untuk pengalaman lebih baik!\n\n` : '') +
+              `Pilih nominal top-up:\n\n` +
+              `Atau ketik \`/topup <jumlah>\` untuk nominal custom.\n_Contoh: /topup 15000_`,
+              {
+                parse_mode: 'Markdown',
+                reply_markup: { inline_keyboard: keyboard }
+              }
+            );
+          }
         }
       } else if (cmd === '/kirim') {
         const text = msg.text.replace(/^\/kirim(@\w+)?\s*/i, '').trim();
@@ -314,8 +300,7 @@ function initBot(token) {
           bot.sendMessage(chatId,
             `✏️ *Cara Mengirim Pesan:*\n\n` +
             `1️⃣ Ketik langsung: \`/kirim pesanmu di sini\`\n` +
-            `2️⃣ Atau kirim teks/foto tanpa command\n\n` +
-            `📷 Untuk foto, langsung kirim foto ke chat ini.\n\n` +
+            `2️⃣ Atau ketik teks tanpa command\n\n` +
             `_Contoh:_ \`/kirim Halo, ini pesan anonim!\``,
             { parse_mode: 'Markdown' }
           );
@@ -330,8 +315,9 @@ function initBot(token) {
           `Gunakan salah satu command berikut:\n` +
           `• /start — Mulai bot\n` +
           `• /kirim — Kirim pesan anonim\n` +
+          `• /balance — Cek saldo\n` +
+          `• /topup — Info top-up saldo\n` +
           `• /referral — Program referral\n` +
-          `• /withdraw — Tarik saldo referral\n` +
           `• /status — Cek status kiriman\n` +
           `• /help — Bantuan`,
           { parse_mode: 'Markdown' }
@@ -354,6 +340,33 @@ function initBot(token) {
       return;
     }
 
+    // ── GENDER CHECK ──
+    if (!user.gender) {
+      askGender(chatId);
+      return;
+    }
+
+    // ── PAID MESSAGE CHECK ──
+    if (db.getSetting('paid_message_enabled') === 'true') {
+      const messageCost = parseInt(db.getSetting('message_cost') || '5000');
+      const totalBalance = db.getTotalBalance(from.id);
+      if (totalBalance < messageCost) {
+        bot.sendMessage(chatId,
+          `💰 *Saldo Tidak Cukup*\n\n` +
+          `Biaya kirim pesan: *Rp${messageCost.toLocaleString('id-ID')}*\n` +
+          `Saldo kamu: *Rp${totalBalance.toLocaleString('id-ID')}*\n` +
+          `Kekurangan: *Rp${(messageCost - totalBalance).toLocaleString('id-ID')}*\n\n` +
+          `📌 Cara isi saldo:\n` +
+          `• 🎁 Ajak teman lewat /referral\n` +
+          `• 💳 Top-up via admin (ketik /topup)\n\n` +
+          `_Saldo akan otomatis terpotong saat kirim pesan._`,
+          { parse_mode: 'Markdown' }
+        );
+        return;
+      }
+      db.deductBalance(from.id, messageCost);
+    }
+
     // ── CHECK AUTO-POST / VIP ──
     const autoPost = db.getSetting('auto_post') === 'true';
     const isVip = autoPost || (user.is_vip && (!user.vip_expires_at || new Date(user.vip_expires_at + 'Z') > new Date()));
@@ -371,42 +384,12 @@ function initBot(token) {
     ts.push(now);
     rateLimitMap.set(key, ts);
 
-    // ── PHOTO ──
-    if (msg.photo) {
-      const photo = msg.photo[msg.photo.length - 1];
-      if (isVip) {
-        // VIP: auto-post to channel
-        const msgId = db.createMessage(user.id, from.id, msg.caption || '', 'photo', photo.file_id, 'approved');
-        try {
-          const message = db.getMessage(msgId);
-          const result = await postToChannel(message);
-          db.setPostedMessageId(msgId, result.message_id);
-          const label = autoPost && !user.is_vip
-            ? `🚀 *Foto Langsung Diposting!*\n\n📋 ID Kiriman: \`#${msgId}\`\n📌 Status: ✅ Diposting ke channel\n\n_Pesanmu langsung terbit di channel!_`
-            : `⭐ *VIP — Foto Langsung Diposting!*\n\n📋 ID Kiriman: \`#${msgId}\`\n📌 Status: ✅ Diposting ke channel\n\n_Keuntungan VIP: pesanmu langsung terbit tanpa review!_`;
-          bot.sendMessage(chatId, label,
-            { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '📋 Cek Status', callback_data: 'check_status' }]] } }
-          );
-        } catch (e) {
-          bot.sendMessage(chatId, `⚠️ Gagal posting otomatis: ${e.message}`, { parse_mode: 'Markdown' });
-        }
-      } else {
-        const msgId = db.createMessage(user.id, from.id, msg.caption || '', 'photo', photo.file_id);
-        bot.sendMessage(chatId,
-          `✅ *Foto Berhasil Dikirim!*\n\n📋 ID Kiriman: \`#${msgId}\`\n📌 Status: ⏳ Menunggu review admin\n\nKamu akan mendapat notifikasi saat pesanmu diproses.\n\n_Ingin kirim pesan lagi? Langsung ketik atau kirim foto!_`,
-          { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '📋 Cek Status', callback_data: 'check_status' }]] } }
-        );
-        notifyAdmin(msgId, user, msg.caption || '📷 [Foto]');
-      }
-      return;
-    }
-
     // ── TEXT ──
     if (msg.text || msg._kirimText) {
       const content = msg._kirimText || msg.text;
       if (isVip) {
         // VIP: auto-post to channel
-        const msgId = db.createMessage(user.id, from.id, content, 'text', null, 'approved');
+        const msgId = db.createMessage(user.id, from.id, content, 'approved');
         try {
           const message = db.getMessage(msgId);
           const result = await postToChannel(message);
@@ -421,7 +404,7 @@ function initBot(token) {
           bot.sendMessage(chatId, `⚠️ Gagal posting otomatis: ${e.message}`, { parse_mode: 'Markdown' });
         }
       } else {
-        const msgId = db.createMessage(user.id, from.id, content, 'text');
+        const msgId = db.createMessage(user.id, from.id, content);
         bot.sendMessage(chatId,
           `✅ *Pesan Berhasil Dikirim!*\n\n📋 ID Kiriman: \`#${msgId}\`\n📌 Status: ⏳ Menunggu review admin\n\nKamu akan mendapat notifikasi saat pesanmu diproses.\n\n_Ingin kirim pesan lagi? Ketik /kirim atau langsung ketik saja!_`,
           { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '📋 Cek Status', callback_data: 'check_status' }]] } }
@@ -432,7 +415,7 @@ function initBot(token) {
     }
 
     // ── UNSUPPORTED FORMAT ──
-    bot.sendMessage(chatId, `⚠️ *Format Tidak Didukung*\n\nBot hanya menerima:\n• 📝 Pesan teks\n• 📷 Foto\n\nSilakan kirim salah satu format di atas.`, { parse_mode: 'Markdown' });
+    bot.sendMessage(chatId, `⚠️ *Format Tidak Didukung*\n\nBot hanya menerima pesan teks.\n\nSilakan kirim pesan teks saja.`, { parse_mode: 'Markdown' });
   });
 
   console.log('🤖 Bot Telegram aktif!');
@@ -444,29 +427,14 @@ function checkAndGiveReward(referrerTgId) {
   const unrewarded = db.getUnrewardedReferralCount(referrerTgId);
   if (unrewarded < minRef) return;
 
-  const rewardType = db.getSetting('referral_reward_type') || 'vip';
-
-  if (rewardType === 'vip') {
-    const vipDays = parseInt(db.getSetting('referral_vip_days') || '7');
-    const user = db.getUser(referrerTgId);
-    if (user) {
-      db.setVip(user.id, vipDays);
-      db.markReferralsRewarded(referrerTgId, 'vip');
-      bot.sendMessage(referrerTgId,
-        `🎁 *Selamat! Kamu Mendapat Hadiah Referral!*\n\n⭐ VIP *${vipDays} hari* telah aktif di akunmu!\n\nPesanmu sekarang langsung terbit tanpa review admin.\nTerus ajak temanmu untuk hadiah lagi! 🔗 /referral`,
-        { parse_mode: 'Markdown' }
-      ).catch(() => {});
-    }
-  } else {
-    const cashAmount = parseInt(db.getSetting('referral_cash_amount') || '10000');
-    db.addReferralBalance(referrerTgId, cashAmount);
-    db.markReferralsRewarded(referrerTgId, 'cash');
-    const newBalance = db.getUserBalance(referrerTgId);
-    bot.sendMessage(referrerTgId,
-      `🎁 *Selamat! Kamu Mendapat Hadiah Referral!*\n\n💰 +Rp${cashAmount.toLocaleString('id-ID')} ditambahkan ke saldomu\n💳 Saldo saat ini: *Rp${newBalance.toLocaleString('id-ID')}*\n\nKetik /withdraw untuk tarik saldo!\nTerus ajak temanmu untuk hadiah lagi! 🔗 /referral`,
-      { parse_mode: 'Markdown' }
-    ).catch(() => {});
-  }
+  const cashAmount = parseInt(db.getSetting('referral_cash_amount') || '10000');
+  db.addBalance(referrerTgId, cashAmount);
+  db.markReferralsRewarded(referrerTgId, 'cash');
+  const newBalance = db.getTotalBalance(referrerTgId);
+  bot.sendMessage(referrerTgId,
+    `🎁 *Selamat! Kamu Mendapat Hadiah Referral!*\n\n💰 +Rp${cashAmount.toLocaleString('id-ID')} ditambahkan ke saldomu\n💳 Saldo saat ini: *Rp${newBalance.toLocaleString('id-ID')}*\n\nGunakan saldo ini untuk biaya kirim pesan!\nTerus ajak temanmu untuk hadiah lagi! 🔗 /referral`,
+    { parse_mode: 'Markdown' }
+  ).catch(() => {});
 }
 
 function notifyAdmin(msgId, user, preview) {
@@ -488,7 +456,6 @@ async function postToChannel(message, customHashtag) {
   let channelId = db.getSetting('channel_id') || process.env.CHANNEL_ID;
   if (!channelId) throw new Error('Channel ID belum diatur! Isi di Pengaturan dashboard atau di file .env');
 
-  // Convert numeric string to number for Telegram API
   if (/^-?\d+$/.test(channelId)) {
     channelId = Number(channelId);
   }
@@ -497,23 +464,24 @@ async function postToChannel(message, customHashtag) {
 
   let content = message.content || '';
 
-  // Prepend custom hashtag above the message
+  // Prepend gender hashtag + custom hashtag above the message
+  const topTags = [];
+  if (message.gender === 'male') topTags.push('#FWBBoy');
+  else if (message.gender === 'female') topTags.push('#FWBGirl');
   const hashtagLine = (customHashtag || '').trim();
-  if (hashtagLine) {
-    content = hashtagLine + '\n\n' + content;
+  if (hashtagLine) topTags.push(hashtagLine);
+  if (topTags.length) {
+    content = topTags.join(' ') + '\n\n' + content;
   }
 
-  // Append global hashtag + footer at the bottom
+  // Append username + footer at the bottom
   const parts = [];
-  if (db.getSetting('hashtag_enabled') === 'true') { const ht = db.getSetting('hashtag_text'); if (ht) parts.push(ht); }
+  if (message.username && message.username !== '') parts.push('@' + message.username);
   const footer = db.getSetting('channel_footer');
   if (footer) parts.push(footer);
   const suffix = parts.length ? '\n\n' + parts.join(' | ') : '';
 
   try {
-    if (message.media_type === 'photo' && message.media_file_id) {
-      return await bot.sendPhoto(channelId, message.media_file_id, { caption: content + suffix });
-    }
     return await bot.sendMessage(channelId, content + suffix);
   } catch (err) {
     console.error('❌ Gagal posting ke channel:', err.message);

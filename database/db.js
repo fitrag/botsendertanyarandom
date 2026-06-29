@@ -51,6 +51,15 @@ async function initDb() {
   try { db.run('ALTER TABLE users ADD COLUMN is_vip INTEGER DEFAULT 0'); } catch(e) {}
   try { db.run('ALTER TABLE users ADD COLUMN vip_expires_at DATETIME'); } catch(e) {}
   try { db.run('ALTER TABLE users ADD COLUMN referral_balance INTEGER DEFAULT 0'); } catch(e) {}
+  try { db.run('ALTER TABLE users ADD COLUMN gender TEXT'); } catch(e) {}
+  try { db.run('ALTER TABLE users ADD COLUMN balance INTEGER DEFAULT 0'); } catch(e) {}
+  // Migrate referral_balance into balance if exists
+  try {
+    const rbRows = getRows(db.exec('SELECT telegram_id, referral_balance FROM users WHERE COALESCE(referral_balance, 0) > 0'));
+    rbRows.forEach(r => {
+      db.run('UPDATE users SET balance = COALESCE(balance, 0) + ? WHERE telegram_id = ?', [r.referral_balance, r.telegram_id]);
+    });
+  } catch(e) {}
 
   db.run(`CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -111,6 +120,17 @@ async function initDb() {
     processed_at DATETIME
   )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS topup_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id TEXT UNIQUE NOT NULL,
+    telegram_id TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    status TEXT DEFAULT 'pending',
+    payment_method TEXT,
+    completed_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
   try { db.run('CREATE INDEX IF NOT EXISTS idx_msg_status ON messages(status)'); } catch(e) {}
   try { db.run('CREATE INDEX IF NOT EXISTS idx_msg_uid ON messages(user_id)'); } catch(e) {}
   try { db.run('CREATE INDEX IF NOT EXISTS idx_msg_created ON messages(created_at)'); } catch(e) {}
@@ -126,21 +146,20 @@ async function initDb() {
 
   // Seed settings
   const defaults = {
-    welcome_message: '👋 Selamat datang!\\nKirimkan pesan teks atau foto yang ingin kamu sampaikan secara anonim.\\nPesan akan direview admin sebelum diposting ke channel.',
+    welcome_message: '👋 Selamat datang!\\nKirimkan pesan teks yang ingin kamu sampaikan secara anonim.\\nPesan akan direview admin sebelum diposting ke channel.',
     approve_message: '✅ Pesanmu telah disetujui dan diposting ke channel!',
     reject_message: '❌ Maaf, pesanmu tidak disetujui oleh admin.',
     help_message: '📝 Cara menggunakan bot:\\n\\n1. Kirim pesan teks atau foto\\n2. Pesan akan direview oleh admin\\n3. Jika disetujui, pesan diposting ke channel secara anonim\\n\\nGunakan /status untuk cek status kiriman.',
-    channel_id: '', rate_limit: '5', hashtag_enabled: 'false',
-    hashtag_text: '#TanyaRandom', maintenance_mode: 'false', port: '3000',
+    channel_id: '', rate_limit: '5', maintenance_mode: 'false', port: '3000',
     channel_footer: '', notify_admin: 'true', notify_comments: 'true',
     auto_post: 'false',
-    bot_name: 'Bot Pengirim Anonim',
     referral_enabled: 'false',
-    referral_reward_type: 'vip',
     referral_cash_amount: '10000',
-    referral_vip_days: '7',
     referral_min_referrals: '1',
-    referral_min_withdraw: '50000'
+    paid_message_enabled: 'false',
+    message_cost: '5000',
+    pakasir_slug: '',
+    pakasir_api_key: ''
   };
   for (const [k, v] of Object.entries(defaults)) {
     db.run('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', [k, v]);
@@ -180,6 +199,10 @@ module.exports = {
     return getOne(db.exec('SELECT * FROM users WHERE telegram_id = ?', [String(tgId)]));
   },
 
+  getUserById(id) {
+    return getOne(db.exec('SELECT * FROM users WHERE id = ?', [Number(id)]));
+  },
+
   createOrUpdateUser(tgId, username, firstName, lastName) {
     db.run('INSERT OR IGNORE INTO users (telegram_id, username, first_name, last_name) VALUES (?, ?, ?, ?)',
       [String(tgId), username, firstName, lastName]);
@@ -205,6 +228,11 @@ module.exports = {
 
   banUser(id) { db.run('UPDATE users SET is_banned = 1 WHERE id = ?', [Number(id)]); saveDb(); },
   unbanUser(id) { db.run('UPDATE users SET is_banned = 0 WHERE id = ?', [Number(id)]); saveDb(); },
+
+  setGender(tgId, gender) {
+    db.run('UPDATE users SET gender = ? WHERE telegram_id = ?', [gender, String(tgId)]);
+    saveDb();
+  },
 
   setVip(id, days) {
     const expires = new Date(Date.now() + days * 86400000).toISOString().replace('T', ' ').slice(0, 19);
@@ -277,56 +305,53 @@ module.exports = {
     return { total, rewarded, pending: total - rewarded, topReferrers };
   },
 
-  // Withdrawal methods
-  addReferralBalance(tgId, amount) {
-    db.run('UPDATE users SET referral_balance = COALESCE(referral_balance, 0) + ? WHERE telegram_id = ?', [amount, String(tgId)]);
-    saveDb();
-  },
-
+  // Balance methods
   getUserBalance(tgId) {
     const user = this.getUser(tgId);
-    return user ? (user.referral_balance || 0) : 0;
+    return user ? (user.balance || 0) : 0;
   },
 
-  createWithdrawal(tgId, amount, paymentMethod, paymentInfo) {
-    db.run('INSERT INTO withdrawals (telegram_id, amount, payment_method, payment_info) VALUES (?, ?, ?, ?)',
-      [String(tgId), amount, paymentMethod, paymentInfo]);
-    const result = db.exec('SELECT last_insert_rowid() as id');
+  addBalance(tgId, amount) {
+    db.run('UPDATE users SET balance = COALESCE(balance, 0) + ? WHERE telegram_id = ?', [amount, String(tgId)]);
     saveDb();
+  },
+
+  deductBalance(tgId, amount) {
+    const total = this.getUserBalance(tgId);
+    if (total < amount) return false;
+    db.run('UPDATE users SET balance = COALESCE(balance, 0) - ? WHERE telegram_id = ?', [amount, String(tgId)]);
+    saveDb();
+    return true;
+  },
+
+  getTotalBalance(tgId) {
+    return this.getUserBalance(tgId);
+  },
+
+  createTopupTransaction(tgId, amount, orderId) {
+    db.run('INSERT INTO topup_transactions (order_id, telegram_id, amount) VALUES (?, ?, ?)',
+      [orderId, String(tgId), amount]);
+    saveDb();
+    const result = db.exec('SELECT last_insert_rowid() as id');
     return result[0].values[0][0];
   },
 
-  getAllWithdrawals(page = 1, limit = 20, status = '') {
-    let q = `SELECT w.*, u.first_name, u.username FROM withdrawals w LEFT JOIN users u ON u.telegram_id = w.telegram_id`;
-    let cq = 'SELECT COUNT(*) FROM withdrawals';
-    const p = [];
-    if (status) { q += ' WHERE w.status = ?'; cq += ' WHERE status = ?'; p.push(status); }
-    const total = getCount(db.exec(cq, [...p]));
-    q += ' ORDER BY w.created_at DESC LIMIT ? OFFSET ?';
-    p.push(limit, (page - 1) * limit);
-    return { withdrawals: getRows(db.exec(q, p)), total, page, limit, totalPages: Math.ceil(total / limit) };
+  getTopupByOrderId(orderId) {
+    return getOne(db.exec('SELECT * FROM topup_transactions WHERE order_id = ?', [orderId]));
   },
 
-  approveWithdrawal(id, note) {
-    const w = getOne(db.exec('SELECT * FROM withdrawals WHERE id = ?', [Number(id)]));
-    if (!w || w.status !== 'pending') return false;
-    db.run('UPDATE withdrawals SET status = ?, note = ?, processed_at = CURRENT_TIMESTAMP WHERE id = ?', ['approved', note || '', Number(id)]);
-    db.run('UPDATE users SET referral_balance = MAX(0, COALESCE(referral_balance, 0) - ?) WHERE telegram_id = ?', [w.amount, w.telegram_id]);
+  completeTopupTransaction(orderId, paymentMethod) {
+    const tx = this.getTopupByOrderId(orderId);
+    if (!tx || tx.status !== 'pending') return null;
+    db.run("UPDATE topup_transactions SET status = 'completed', payment_method = ?, completed_at = CURRENT_TIMESTAMP WHERE order_id = ?",
+      [paymentMethod || '', orderId]);
     saveDb();
-    return w;
+    return this.getTopupByOrderId(orderId);
   },
 
-  rejectWithdrawal(id, note) {
-    const w = getOne(db.exec('SELECT * FROM withdrawals WHERE id = ?', [Number(id)]));
-    if (!w || w.status !== 'pending') return false;
-    db.run('UPDATE withdrawals SET status = ?, note = ?, processed_at = CURRENT_TIMESTAMP WHERE id = ?', ['rejected', note || '', Number(id)]);
-    saveDb();
-    return w;
-  },
-
-  createMessage(userId, tgId, content, mediaType = 'text', mediaFileId = null, status = 'pending') {
-    db.run('INSERT INTO messages (user_id, telegram_id, content, media_type, media_file_id, status) VALUES (?, ?, ?, ?, ?, ?)',
-      [userId, String(tgId), content, mediaType, mediaFileId, status]);
+  createMessage(userId, tgId, content, status = 'pending') {
+    db.run('INSERT INTO messages (user_id, telegram_id, content, status) VALUES (?, ?, ?, ?)',
+      [userId, String(tgId), content, status]);
     db.run('UPDATE users SET message_count = message_count + 1 WHERE telegram_id = ?', [String(tgId)]);
     const result = db.exec('SELECT last_insert_rowid() as id');
     saveDb();
@@ -334,7 +359,7 @@ module.exports = {
   },
 
   getMessage(id) {
-    return getOne(db.exec('SELECT m.*, u.username, u.first_name, u.last_name FROM messages m JOIN users u ON m.user_id = u.id WHERE m.id = ?', [Number(id)]));
+    return getOne(db.exec('SELECT m.*, u.username, u.first_name, u.last_name, u.gender FROM messages m JOIN users u ON m.user_id = u.id WHERE m.id = ?', [Number(id)]));
   },
 
   getMessages(page = 1, limit = 20, status = 'all', search = '') {
