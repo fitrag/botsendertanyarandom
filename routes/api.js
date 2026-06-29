@@ -189,4 +189,17 @@ router.post('/support-tickets/:id/close', (req, res) => {
   res.json({ success: true });
 });
 
+// Announcement
+router.post('/announcement', async (req, res) => {
+  const { text, pin } = req.body || {};
+  if (!text || !text.trim()) return res.status(400).json({ error: 'Teks pengumuman diperlukan' });
+  try {
+    const { postAnnouncement } = require('../bot/bot');
+    await postAnnouncement(text.trim(), pin === true);
+    res.json({ success: true });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;

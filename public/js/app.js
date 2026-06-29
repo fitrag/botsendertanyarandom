@@ -32,7 +32,7 @@ document.getElementById('themeToggle').addEventListener('click', () => {
 
 // ===== NAV =====
 let currentPage = 'dashboard';
-const titles = { dashboard: 'Dashboard', messages: 'Kiriman Pesan', users: 'Pengguna', settings: 'Pengaturan', support: 'Support' };
+const titles = { dashboard: 'Dashboard', messages: 'Kiriman Pesan', users: 'Pengguna', settings: 'Pengaturan', support: 'Support', announcement: 'Pengumuman' };
 const navActive = 'bg-violet-50 dark:bg-violet-600/10 text-violet-600 dark:text-violet-400';
 const navInactive = 'text-slate-500 dark:text-zinc-400';
 
@@ -55,6 +55,7 @@ function navigateTo(page) {
   else if (page === 'users') loadUsers();
   else if (page === 'settings') loadSettings();
   else if (page === 'support') loadSupport();
+  else if (page === 'announcement') resetAnnouncement();
 }
 
 // ===== LOGOUT =====
@@ -443,8 +444,8 @@ function topupUser(id, name) {
 }
 
 // ===== SETTINGS =====
-const sFields = ['welcome_message','help_message','approve_message','reject_message','channel_id','channel_footer','rate_limit','referral_cash_amount','referral_min_referrals','message_cost','pakasir_slug','pakasir_api_key'];
-const sToggles = ['maintenance_mode','notify_admin','notify_comments','referral_enabled','auto_post','paid_message_enabled','topup_bot_enabled','topup_miniapp_enabled'];
+const sFields = ['welcome_message','help_message','approve_message','reject_message','channel_id','channel_footer','channel_link','rate_limit','referral_cash_amount','referral_min_referrals','message_cost','pakasir_slug','pakasir_api_key'];
+const sToggles = ['maintenance_mode','notify_admin','notify_comments','referral_enabled','auto_post','paid_message_enabled','topup_bot_enabled','topup_miniapp_enabled','transfer_enabled'];
 const sSelects = [];
 
 async function loadSettings() {
@@ -547,6 +548,50 @@ async function closeTicket(id) {
   if (!confirm('Tutup tiket ini?')) return;
   try { await api(`/api/support-tickets/${id}/close`, { method: 'POST' }); toast('Tiket ditutup'); loadSupport(); } catch(e) { toast(e.message, 'error'); }
 }
+
+// ===== ANNOUNCEMENT =====
+function resetAnnouncement() {
+  document.getElementById('announcementText').value = '';
+  document.getElementById('pinAnnouncement').checked = false;
+  document.getElementById('announcementError').classList.add('hidden');
+  document.getElementById('announcementSuccess').classList.add('hidden');
+  document.getElementById('sendAnnouncementBtn').disabled = false;
+  document.getElementById('sendAnnouncementBtn').innerHTML = '<i data-lucide="send" class="w-3.5 h-3.5"></i> Kirim Pengumuman';
+  lucide.createIcons();
+}
+
+document.getElementById('sendAnnouncementBtn').addEventListener('click', async () => {
+  const text = document.getElementById('announcementText').value.trim();
+  if (!text) {
+    const err = document.getElementById('announcementError');
+    err.textContent = 'Tulis pesan pengumuman terlebih dahulu';
+    err.classList.remove('hidden');
+    return;
+  }
+
+  const pin = document.getElementById('pinAnnouncement').checked;
+  const btn = document.getElementById('sendAnnouncementBtn');
+  const err = document.getElementById('announcementError');
+  const success = document.getElementById('announcementSuccess');
+  err.classList.add('hidden');
+  success.classList.add('hidden');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Mengirim...';
+
+  try {
+    await api('/api/announcement', { method: 'POST', body: { text, pin } });
+    success.textContent = pin ? '✅ Pengumuman terkirim & dipin di channel!' : '✅ Pengumuman terkirim ke channel!';
+    success.classList.remove('hidden');
+    document.getElementById('announcementText').value = '';
+    document.getElementById('pinAnnouncement').checked = false;
+  } catch(e) {
+    err.textContent = e.message;
+    err.classList.remove('hidden');
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i data-lucide="send" class="w-3.5 h-3.5"></i> Kirim Pengumuman';
+  lucide.createIcons();
+});
 
 async function loadConversation(ticketId) {
   const el = document.getElementById('conv-' + ticketId);

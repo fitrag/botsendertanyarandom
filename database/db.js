@@ -181,7 +181,7 @@ async function initDb() {
     reject_message: '❌ Maaf, pesanmu tidak disetujui oleh admin.',
     help_message: '📝 Cara menggunakan bot:\\n\\n1. Dari Menu Utama, klik Kirim Pesan\\n2. Tulis pesan yang ingin dikirim\\n3. Admin akan mereview pesanmu\\n4. Jika disetujui, pesan diposting ke channel\\n\\nGunakan /menu untuk kembali ke menu utama.',
     channel_id: '', rate_limit: '5', maintenance_mode: 'false', port: '3000',
-    channel_footer: '', notify_admin: 'true', notify_comments: 'true',
+    channel_footer: '', channel_link: '', notify_admin: 'true', notify_comments: 'true',
     auto_post: 'false',
     referral_enabled: 'false',
     referral_cash_amount: '10000',
@@ -190,6 +190,7 @@ async function initDb() {
     message_cost: '5000',
     topup_bot_enabled: 'true',
     topup_miniapp_enabled: 'true',
+    transfer_enabled: 'true',
     pakasir_slug: '',
     pakasir_api_key: ''
   };
@@ -236,7 +237,8 @@ module.exports = {
   },
 
   findUser(query) {
-    return getOne(db.exec('SELECT * FROM users WHERE telegram_id = ? OR username = ?', [String(query), String(query)]));
+    const q = String(query).trim();
+    return getOne(db.exec('SELECT * FROM users WHERE telegram_id = ? OR LOWER(username) = ?', [q, q.toLowerCase()]));
   },
 
   transferBalance(senderTgId, receiverTgId, amount) {

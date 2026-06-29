@@ -7,6 +7,7 @@ const writeMode = new Set();
 const lastBotMsg = new Map();
 const supportState = new Map();
 const supportReplyFor = new Map();
+const channelMemberCache = new Map();
 
 function initBot(token) {
   bot = new TelegramBot(token, { polling: true });
@@ -100,6 +101,12 @@ function initBot(token) {
     const sent = await bot.sendMessage(chatId, text, options);
     lastBotMsg.set(String(chatId), sent.message_id);
     return sent;
+  }
+
+  function getChannelLink() {
+    const link = (db.getSetting('channel_link') || '').trim();
+    if (!link) return '';
+    return link.startsWith('http') ? link : 'https://' + link;
   }
 
   async function showMainMenu(chatId) {
@@ -197,6 +204,39 @@ function initBot(token) {
     const fromId = String(query.from.id);
     const data = query.data;
     bot.answerCallbackQuery(query.id).catch(() => {});
+
+    // ── MUST JOIN CHANNEL ──
+    const channelId = db.getSetting('channel_id') || process.env.CHANNEL_ID;
+    if (channelId) {
+      const cacheKey = fromId;
+      const cached = channelMemberCache.get(cacheKey);
+      const now = Date.now();
+      let isMember = false;
+      if (cached && (now - cached.time < 5000)) {
+        isMember = cached.member;
+      } else {
+        try {
+          const cid = /^-?\d+$/.test(channelId) ? Number(channelId) : channelId;
+          const chatMember = await bot.getChatMember(cid, query.from.id);
+          isMember = ['creator', 'administrator', 'member'].includes(chatMember.status);
+          channelMemberCache.set(cacheKey, { member: isMember, time: now });
+        } catch(e) {
+          console.error('getChatMember error:', e.message);
+          isMember = true;
+        }
+      }
+if (!isMember) {
+          const channelLink = getChannelLink();
+        const keyboard = channelLink
+          ? { reply_markup: { inline_keyboard: [[{ text: '📢 Gabung Channel', url: channelLink }]] } }
+          : {};
+        bot.sendMessage(chatId,
+          `🔒 *Akses Terbatas*\n\nKamu harus bergabung ke channel terlebih dahulu untuk menggunakan bot ini.` + (channelLink ? `\n\nKlik tombol di bawah untuk bergabung:` : ''),
+          { parse_mode: 'Markdown', ...keyboard }
+        );
+        return;
+      }
+    }
 
     if (data === 'check_status') {
       sendStatus(chatId, query.from.id);
@@ -326,6 +366,53 @@ function initBot(token) {
 
     const chatId = msg.chat.id;
     const from = msg.from;
+
+    // ── USER MUST /start FIRST ──
+    const cmdCheck = msg.text && msg.text.startsWith('/') ? msg.text.split('@')[0].toLowerCase().split(' ')[0] : '';
+    if (cmdCheck !== '/start') {
+      const existingUser = db.getUser(from.id);
+      if (!existingUser) {
+        bot.sendMessage(chatId, `👋 *Halo!*\n\nSebelum menggunakan bot, silakan ketik /start terlebih dahulu.`, { parse_mode: 'Markdown' });
+        return;
+      }
+    }
+
+    // ── MUST JOIN CHANNEL ──
+    if (cmdCheck !== '/start') {
+      const channelId = db.getSetting('channel_id') || process.env.CHANNEL_ID;
+      const channelLink = getChannelLink();
+      if (channelId) {
+        const cacheKey = String(from.id);
+        const cached = channelMemberCache.get(cacheKey);
+        const now = Date.now();
+
+        let isMember = false;
+        if (cached && (now - cached.time < 5000)) {
+          isMember = cached.member;
+        } else {
+          try {
+            const chatId = /^-?\d+$/.test(channelId) ? Number(channelId) : channelId;
+            const chatMember = await bot.getChatMember(chatId, from.id);
+            isMember = ['creator', 'administrator', 'member'].includes(chatMember.status);
+            channelMemberCache.set(cacheKey, { member: isMember, time: now });
+          } catch(e) {
+            console.error('getChatMember error:', e.message);
+            isMember = true;
+          }
+        }
+
+        if (!isMember) {
+          const keyboard = channelLink
+            ? { reply_markup: { inline_keyboard: [[{ text: '📢 Gabung Channel', url: channelLink }]] } }
+            : {};
+          bot.sendMessage(chatId,
+            `🔒 *Akses Terbatas*\n\nKamu harus bergabung ke channel terlebih dahulu untuk menggunakan bot ini.` + (channelLink ? `\n\nKlik tombol di bawah untuk bergabung:` : ''),
+            { parse_mode: 'Markdown', ...keyboard }
+          );
+          return;
+        }
+      }
+    }
 
     // ── COMMAND ROUTING ──
     if (msg.text && msg.text.startsWith('/')) {
@@ -787,4 +874,16 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-module.exports = { initBot, getBot, postToChannel, notifyUser, deleteFromChannel };
+async function postAnnouncement(text, shouldPin) {
+  let channelId = db.getSetting('channel_id') || process.env.CHANNEL_ID;
+  if (!channelId) throw new Error('Channel ID belum diatur');
+  if (/^-?\d+$/.test(channelId)) channelId = Number(channelId);
+
+  const sent = await bot.sendMessage(channelId, text, { parse_mode: 'Markdown' });
+  if (shouldPin && sent) {
+    try { await bot.pinChatMessage(channelId, sent.message_id); } catch(e) {}
+  }
+  return sent;
+}
+
+module.exports = { initBot, getBot, postToChannel, notifyUser, deleteFromChannel, postAnnouncement };

@@ -124,16 +124,31 @@
     <p>Isi saldo untuk kirim pesan anonim</p>
   </div>
 
+  <div id="notStarted" class="hidden">
+    <div class="payment-card" style="text-align:center;margin-top:20px;padding:40px 22px;">
+      <div style="font-size:56px;margin-bottom:16px;">👋</div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px;">Mulai Bot Dulu!</div>
+      <div style="font-size:13px;color:var(--tg-theme-hint-color,#8e8e93);line-height:1.6">
+        Sebelum menggunakan aplikasi ini,<br>
+        silakan buka bot dan ketik <b>/start</b> terlebih dahulu.
+      </div>
+      <button class="primary-btn" style="margin-top:20px;" onclick="if(tg)tg.close()">Tutup</button>
+    </div>
+  </div>
+
+  <div id="mainContent" class="hidden">
+
   <div class="balance-card" id="balanceCard">
     <div class="label">Saldo Saat Ini</div>
     <div class="amount" id="balanceAmount">Rp0</div>
     <div class="hint" id="balanceEstimate"></div>
   </div>
 
-  <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('topup')">Top-Up</button>
-    <button class="tab-btn" onclick="switchTab('send')">Kirim</button>
+  <div class="tabs" id="mainTabs">
+    <button class="tab-btn active" onclick="switchTab('topup')" id="tabTopupBtn">Top-Up</button>
+    <button class="tab-btn" onclick="switchTab('send')" id="tabSendBtn" style="display:none">Kirim</button>
     <button class="tab-btn" onclick="switchTab('history')">Riwayat</button>
+    <button class="tab-btn" onclick="switchTab('referral')" id="tabReferralBtn" style="display:none">Referral</button>
   </div>
 
   <div id="tabTopup">
@@ -235,6 +250,31 @@
     </button>
     <div class="payment-card" id="detailContent"></div>
   </div>
+
+  <div id="tabReferral" class="hidden">
+    <div class="payment-card" style="text-align:center;margin-top:0;">
+      <div style="font-size:48px;margin-bottom:12px;">🎁</div>
+      <div style="font-size:20px;font-weight:800;margin-bottom:4px;">Dapatkan Saldo Gratis!</div>
+      <div style="font-size:13px;color:var(--tg-theme-hint-color,#8e8e93);margin-bottom:20px;line-height:1.6">
+        Ajak teman bergabung lewat link referralmu dan dapatkan <b id="refAmount">Rp10.000</b> saldo per orang!
+      </div>
+      <div id="refStats" style="background:var(--tg-theme-bg-color,#fff);border-radius:12px;padding:14px;margin-bottom:16px;">
+        <div style="font-size:24px;font-weight:800;color:#8b5cf6;" id="refCount">0</div>
+        <div style="font-size:11px;color:var(--tg-theme-hint-color,#8e8e93);">Orang berhasil diajak</div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <div style="font-size:11px;color:var(--tg-theme-hint-color,#8e8e93);margin-bottom:6px;">Link Referral Kamu</div>
+        <div id="refLinkBox" style="background:var(--tg-theme-bg-color,#fff);border:2px dashed var(--tg-theme-secondary-bg-color,#e8e8ed);border-radius:12px;padding:14px;font-size:12px;word-break:break-all;color:var(--tg-theme-text-color,#1a1a2e);margin-bottom:8px;" id="refLink">-</div>
+        <button class="primary-btn" style="background:var(--tg-theme-bg-color,#fff);color:#8b5cf6;box-shadow:none;border:1.5px solid #8b5cf6;" onclick="copyRefLink()">
+          <i data-lucide="copy" class="lucide"></i> Salin Link
+        </button>
+      </div>
+      <div style="font-size:11px;color:var(--tg-theme-hint-color,#8e8e93);">
+        Bagikan link di atas ke teman-temanmu!
+      </div>
+    </div>
+  </div>
+</div>
 </div>
 
 <script>
@@ -243,14 +283,47 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(refreshIcons, 100
 
 const tg = window.Telegram?.WebApp;
 let tgUser = null;
-let selectedAmount = 0;
-let selectedMethod = 'qris';
+let userExists = false;
 
 if (tg) {
   tg.ready();
   tg.expand();
   tgUser = tg.initDataUnsafe?.user;
 }
+
+async function checkUser() {
+  const tid = tgUser?.id || new URLSearchParams(window.location.search).get('tid');
+  if (!tid) return;
+  try {
+    const res = await fetch('/api/pakasir/balance/' + tid);
+    const data = await res.json();
+    if (data.exists) {
+      userExists = true;
+      document.getElementById('mainContent').classList.remove('hidden');
+      document.getElementById('notStarted').classList.add('hidden');
+      document.getElementById('tabSendBtn').style.display = data.transfer_enabled ? '' : 'none';
+      if (data.miniapp_enabled) {
+        document.getElementById('tabTopupBtn').style.display = '';
+        document.getElementById('tabReferralBtn').style.display = 'none';
+      } else {
+        document.getElementById('tabTopupBtn').style.display = 'none';
+        if (data.referral_enabled) {
+          document.getElementById('tabReferralBtn').style.display = '';
+          switchTab('referral');
+        }
+      }
+      loadBalance();
+    } else {
+      userExists = false;
+      document.getElementById('mainContent').classList.add('hidden');
+      document.getElementById('notStarted').classList.remove('hidden');
+    }
+  } catch(e) {}
+}
+checkUser();
+
+let selectedAmount = 0;
+let selectedMethod = 'qris';
 
 async function loadBalance() {
   try {
@@ -387,9 +460,11 @@ function switchTab(tab) {
   document.getElementById('tabHistory').classList.toggle('hidden', tab !== 'history');
   document.getElementById('tabSend').classList.toggle('hidden', tab !== 'send');
   document.getElementById('tabDetail').classList.toggle('hidden', tab !== 'detail');
+  document.getElementById('tabReferral').classList.toggle('hidden', tab !== 'referral');
   if (tab === 'topup') resetForm();
   else if (tab === 'history') loadHistory();
   else if (tab === 'send') resetSendForm();
+  else if (tab === 'referral') loadReferral();
   refreshIcons();
 }
 
@@ -474,11 +549,12 @@ async function sendBalance() {
   const tid = tgUser?.id || new URLSearchParams(window.location.search).get('tid');
   if (!tid) { showSendError('Tidak dapat membaca identitas'); return; }
 
-  const recipient = document.getElementById('sendRecipient').value.trim();
+  let recipient = document.getElementById('sendRecipient').value.replace(/^@/, '').trim();
   const customAmount = parseInt(document.getElementById('sendAmount').value);
   const amount = customAmount >= 1000 ? customAmount : sendSelectedAmount;
 
   if (!recipient) { showSendError('Masukkan Telegram ID atau @username penerima'); return; }
+  if (!/^[a-zA-Z0-9_]+$/.test(recipient)) { showSendError('Format ID/username tidak valid. Gunakan huruf, angka, atau underscore saja.'); return; }
   if (!amount || amount < 1000) { showSendError('Masukkan jumlah minimal Rp1.000'); return; }
 
   const btn = document.getElementById('sendBtn');
@@ -521,6 +597,40 @@ function showSendError(msg) {
   const el = document.getElementById('sendError');
   el.textContent = msg;
   el.classList.remove('hidden');
+}
+
+let refLinkUrl = '';
+
+async function loadReferral() {
+  const tid = tgUser?.id || new URLSearchParams(window.location.search).get('tid');
+  if (!tid) return;
+  try {
+    const res = await fetch('/api/pakasir/referral-link/' + tid);
+    const data = await res.json();
+    document.getElementById('refCount').textContent = data.count;
+    document.getElementById('refAmount').textContent = 'Rp' + data.amount.toLocaleString('id-ID');
+    refLinkUrl = data.link;
+    document.getElementById('refLinkBox').textContent = data.link || '-';
+    refreshIcons();
+  } catch(e) {}
+}
+
+function copyRefLink() {
+  if (!refLinkUrl) return;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(refLinkUrl).then(() => toastCopy());
+  } else if (tg) {
+    tg.copyTextToClipboard(refLinkUrl);
+    toastCopy();
+  }
+}
+
+function toastCopy() {
+  const el = document.getElementById('refLinkBox');
+  const orig = el.textContent;
+  el.textContent = '✅ Link disalin!';
+  el.style.borderColor = '#8b5cf6';
+  setTimeout(() => { el.textContent = orig; el.style.borderColor = ''; }, 2000);
 }
 </script>
 </body>

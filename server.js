@@ -30,9 +30,34 @@ async function main() {
 
   app.get('/topup', (req, res) => res.sendFile(path.join(__dirname, 'public/pages/topup.html')));
   app.get('/api/pakasir/balance/:tid', (req, res) => {
+    const user = db.getUser(req.params.tid);
+    if (!user) return res.status(404).json({ error: 'User not found', exists: false });
     const balance = db.getUserBalance(req.params.tid);
     const messageCost = parseInt(db.getSetting('message_cost') || '0');
-    res.json({ balance, message_cost: messageCost });
+    res.json({
+      balance, message_cost: messageCost, exists: true,
+      transfer_enabled: db.getSetting('transfer_enabled') !== 'false',
+      miniapp_enabled: db.getSetting('topup_miniapp_enabled') !== 'false',
+      referral_enabled: db.getSetting('referral_enabled') === 'true',
+      referral_count: db.getReferralCount(req.params.tid),
+      referral_amount: parseInt(db.getSetting('referral_cash_amount') || '10000')
+    });
+  });
+
+  app.get('/api/pakasir/referral-link/:tid', async (req, res) => {
+    try {
+      const bot = require('./bot/bot').getBot();
+      const botInfo = bot ? await bot.getMe() : null;
+      const botUsername = botInfo ? botInfo.username : '';
+      res.json({
+        link: botUsername ? `https://t.me/${botUsername}?start=ref_${req.params.tid}` : '',
+        count: db.getReferralCount(req.params.tid),
+        amount: parseInt(db.getSetting('referral_cash_amount') || '10000'),
+        enabled: db.getSetting('referral_enabled') === 'true'
+      });
+    } catch(e) {
+      res.json({ link: '', count: 0, amount: 10000, enabled: false });
+    }
   });
 
   app.get('/api/pakasir/history/:tid', (req, res) => {
@@ -47,17 +72,19 @@ async function main() {
   });
 
   app.post('/api/pakasir/transfer', async (req, res) => {
-    const { telegram_id, recipient, amount } = req.body;
+    const { telegram_id, amount } = req.body;
+    const recipient = (req.body.recipient || '').replace(/^@/, '').trim();
     if (!telegram_id || !recipient || !amount) return res.status(400).json({ error: 'Data tidak lengkap' });
+    if (db.getSetting('transfer_enabled') === 'false') return res.status(400).json({ error: 'Fitur transfer sedang dinonaktifkan' });
+    if (!/^[a-zA-Z0-9_]+$/.test(recipient)) return res.status(400).json({ error: 'Format ID/username tidak valid' });
     if (amount < 1000) return res.status(400).json({ error: 'Minimal transfer Rp1.000' });
 
     const sender = db.getUser(telegram_id);
     if (!sender) return res.status(404).json({ error: 'Pengirim tidak ditemukan' });
-    if (String(telegram_id) === String(recipient)) return res.status(400).json({ error: 'Tidak bisa kirim ke diri sendiri' });
 
     const receiver = db.findUser(recipient);
     if (!receiver) return res.status(404).json({ error: 'Penerima tidak ditemukan. Pastikan ID/username benar.' });
-
+    if (String(telegram_id) === String(receiver.telegram_id)) return res.status(400).json({ error: 'Tidak bisa kirim ke diri sendiri' });
     const balance = db.getUserBalance(telegram_id);
     if (balance < amount) return res.status(400).json({ error: 'Saldo tidak cukup' });
 
