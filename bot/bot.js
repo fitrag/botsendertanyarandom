@@ -225,8 +225,8 @@ function initBot(token) {
           isMember = true;
         }
       }
-if (!isMember) {
-          const channelLink = getChannelLink();
+      if (!isMember) {
+        const channelLink = getChannelLink();
         const keyboard = channelLink
           ? { reply_markup: { inline_keyboard: [[{ text: '📢 Gabung Channel', url: channelLink }]] } }
           : {};

@@ -71,6 +71,14 @@ async function main() {
     res.json(tx);
   });
 
+  app.get('/api/pakasir/challenge', (req, res) => {
+    const challenge = db.getActiveChallenge();
+    if (!challenge) return res.json({ active: false });
+    const leaderboard = db.getChallengeLeaderboard(challenge.id);
+    const userRank = req.query.tid ? db.getUserChallengeRank(challenge.id, req.query.tid) : null;
+    res.json({ active: true, challenge, leaderboard, userRank });
+  });
+
   app.post('/api/pakasir/transfer', async (req, res) => {
     const { telegram_id, amount } = req.body;
     const recipient = (req.body.recipient || '').replace(/^@/, '').trim();

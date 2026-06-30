@@ -149,6 +149,7 @@
     <button class="tab-btn" onclick="switchTab('send')" id="tabSendBtn" style="display:none">Kirim</button>
     <button class="tab-btn" onclick="switchTab('history')">Riwayat</button>
     <button class="tab-btn" onclick="switchTab('referral')" id="tabReferralBtn" style="display:none">Referral</button>
+    <button class="tab-btn" onclick="switchTab('challenge')" id="tabChallengeBtn">Challenge</button>
   </div>
 
   <div id="tabTopup">
@@ -273,8 +274,25 @@
         Bagikan link di atas ke teman-temanmu!
       </div>
     </div>
-  </div>
 </div>
+  </div>
+
+  <div id="tabChallenge" class="hidden">
+    <div class="payment-card" style="text-align:center;margin-top:0;">
+      <div id="challengeHeader">
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px;"><i data-lucide="trophy" class="lucide-lg" style="color:#f59e0b;"></i></div>
+        <div style="font-size:20px;font-weight:800;margin-bottom:4px;" id="chTitle">-</div>
+        <div style="font-size:12px;color:var(--tg-theme-hint-color,#8e8e93);margin-bottom:4px;" id="chDesc"></div>
+        <div style="font-size:13px;color:#8b5cf6;font-weight:700;margin-bottom:12px;" id="chReward"></div>
+        <div id="chCountdown" style="background:#fef3c7;border-radius:10px;padding:10px;display:inline-block;font-size:13px;font-weight:700;color:#d97706;margin-bottom:8px;">-</div>
+        <div style="font-size:10px;color:var(--tg-theme-hint-color,#8e8e93);margin-bottom:16px;" id="chYourScore"></div>
+      </div>
+      <div id="chNotActive" style="padding:32px 0;color:var(--tg-theme-hint-color,#8e8e93);font-size:13px;display:none;">
+        Tidak ada challenge aktif saat ini
+      </div>
+      <div id="chLeaderboard" style="text-align:left;"></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -461,10 +479,12 @@ function switchTab(tab) {
   document.getElementById('tabSend').classList.toggle('hidden', tab !== 'send');
   document.getElementById('tabDetail').classList.toggle('hidden', tab !== 'detail');
   document.getElementById('tabReferral').classList.toggle('hidden', tab !== 'referral');
+  document.getElementById('tabChallenge').classList.toggle('hidden', tab !== 'challenge');
   if (tab === 'topup') resetForm();
   else if (tab === 'history') loadHistory();
   else if (tab === 'send') resetSendForm();
   else if (tab === 'referral') loadReferral();
+  else if (tab === 'challenge') loadChallenge();
   refreshIcons();
 }
 
@@ -632,6 +652,68 @@ function toastCopy() {
   el.style.borderColor = '#8b5cf6';
   setTimeout(() => { el.textContent = orig; el.style.borderColor = ''; }, 2000);
 }
+
+async function loadChallenge() {
+  const tid = tgUser?.id || new URLSearchParams(window.location.search).get('tid');
+  const res = await fetch(`/api/pakasir/challenge${tid ? '?tid=' + tid : ''}`);
+  const data = await res.json();
+
+  document.getElementById('chNotActive').style.display = data.active ? 'none' : 'block';
+  document.getElementById('challengeHeader').style.display = data.active ? '' : 'none';
+  document.getElementById('chLeaderboard').style.display = data.active ? '' : 'none';
+
+  if (!data.active) return;
+
+  const c = data.challenge;
+  document.getElementById('chTitle').textContent = c.title;
+  document.getElementById('chDesc').textContent = c.description || '';
+  document.getElementById('chReward').textContent = c.reward ? '🎁 ' + c.reward : '';
+
+  // Countdown
+  const endStr = String(c.end_time);
+  const endTime = new Date(endStr.endsWith('Z') ? endStr : endStr + 'Z').getTime();
+  updateCountdown(endTime);
+  if (window._chInterval) clearInterval(window._chInterval);
+  window._chInterval = setInterval(() => updateCountdown(endTime), 1000);
+
+  // User score
+  if (data.userRank) {
+    document.getElementById('chYourScore').textContent = `Kamu: ${data.userRank.count} undangan`;
+  }
+
+  // Leaderboard
+  const lb = data.leaderboard || [];
+  if (!lb.length) {
+    document.getElementById('chLeaderboard').innerHTML = '<div style="text-align:center;padding:16px;color:var(--tg-theme-hint-color);font-size:12px">Belum ada peserta</div>';
+  } else {
+    document.getElementById('chLeaderboard').innerHTML = `<div class="method-label" style="margin-bottom:8px;">🏆 Leaderboard</div>` +
+      lb.map((u, i) => {
+        const medals = { 0: '🥇', 1: '🥈', 2: '🥉' };
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--tg-theme-secondary-bg-color,#e8e8ed);${i>=lb.length-1?'border-bottom:none;':''}">
+          <span style="font-size:18px;width:30px;text-align:center;">${medals[i] || (i+1+'.')}</span>
+          <div style="flex:1;"><div style="font-size:13px;font-weight:600;">${esc(u.first_name || '')}</div><div style="font-size:10px;color:var(--tg-theme-hint-color);">${u.username ? '@'+esc(u.username) : ''}</div></div>
+          <span style="font-size:13px;font-weight:700;color:#8b5cf6;">${u.count} 👥</span>
+        </div>`;
+      }).join('');
+  }
+  refreshIcons();
+}
+
+function updateCountdown(endTime) {
+  const now = Date.now();
+  const diff = Math.max(0, endTime - now);
+  const d = Math.floor(diff / 86400000);
+  const h = Math.floor((diff % 86400000) / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  document.getElementById('chCountdown').textContent = `⏳ ${d} Hari : ${h} Jam : ${m} Menit : ${s} Detik`;
+  if (diff <= 0) {
+    document.getElementById('chCountdown').textContent = '🔴 Selesai';
+    if (window._chInterval) { clearInterval(window._chInterval); window._chInterval = null; }
+  }
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 </script>
 </body>
 </html>

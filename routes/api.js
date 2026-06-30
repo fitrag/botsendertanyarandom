@@ -202,4 +202,27 @@ router.post('/announcement', async (req, res) => {
   }
 });
 
+// Challenges
+router.get('/challenges', (req, res) => {
+  res.json({ challenges: db.getAllChallenges() });
+});
+
+router.get('/challenges/active', (req, res) => {
+  const challenge = db.getActiveChallenge();
+  if (!challenge) return res.json({ active: false });
+  res.json({ active: true, challenge, leaderboard: db.getChallengeLeaderboard(challenge.id) });
+});
+
+router.post('/challenges', (req, res) => {
+  const { title, description, reward, winners_count, start_time, end_time } = req.body || {};
+  if (!title || !start_time || !end_time) return res.status(400).json({ error: 'Data tidak lengkap' });
+  const id = db.createChallenge(title, description || '', reward || '', winners_count || 3, start_time, end_time);
+  res.json({ success: true, id });
+});
+
+router.post('/challenges/:id/end', (req, res) => {
+  db.endChallenge(req.params.id);
+  res.json({ success: true });
+});
+
 module.exports = router;

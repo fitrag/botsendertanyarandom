@@ -161,6 +161,18 @@ async function initDb() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS challenges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT,
+    reward TEXT,
+    winners_count INTEGER DEFAULT 3,
+    start_time DATETIME NOT NULL,
+    end_time DATETIME NOT NULL,
+    status TEXT DEFAULT 'active',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
   try { db.run('CREATE INDEX IF NOT EXISTS idx_msg_status ON messages(status)'); } catch(e) {}
   try { db.run('CREATE INDEX IF NOT EXISTS idx_msg_uid ON messages(user_id)'); } catch(e) {}
   try { db.run('CREATE INDEX IF NOT EXISTS idx_msg_created ON messages(created_at)'); } catch(e) {}
@@ -464,6 +476,60 @@ cancelTopupTransaction(orderId) {
   closeSupportTicket(id) {
     db.run("UPDATE support_tickets SET status = 'closed', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [Number(id)]);
     saveDb();
+  },
+
+  createChallenge(title, description, reward, winnersCount, startTime, endTime) {
+    db.run('INSERT INTO challenges (title, description, reward, winners_count, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?)',
+      [title, description, reward, winnersCount, startTime, endTime]);
+    const result = db.exec('SELECT last_insert_rowid() as id');
+    saveDb();
+    return result[0].values[0][0];
+  },
+
+  getActiveChallenge() {
+    return getOne(db.exec("SELECT * FROM challenges WHERE status = 'active' AND end_time > datetime('now') ORDER BY created_at DESC LIMIT 1"));
+  },
+
+  getAllChallenges() {
+    return getRows(db.exec('SELECT * FROM challenges ORDER BY created_at DESC LIMIT 20'));
+  },
+
+  getChallenge(id) {
+    return getOne(db.exec('SELECT * FROM challenges WHERE id = ?', [Number(id)]));
+  },
+
+  endChallenge(id) {
+    db.run("UPDATE challenges SET status = 'ended' WHERE id = ?", [Number(id)]);
+    saveDb();
+  },
+
+  getChallengeLeaderboard(challengeId, limit = 10) {
+    const challenge = this.getChallenge(challengeId);
+    if (!challenge) return [];
+    return getRows(db.exec(
+      `SELECT r.referrer_telegram_id, u.first_name, u.username, COUNT(*) as count
+       FROM referrals r LEFT JOIN users u ON u.telegram_id = r.referrer_telegram_id
+       WHERE r.created_at >= ? AND r.created_at <= ?
+       GROUP BY r.referrer_telegram_id ORDER BY count DESC LIMIT ?`,
+      [challenge.start_time, challenge.end_time, limit]
+    ));
+  },
+
+  getUserChallengeRank(challengeId, tgId) {
+    const challenge = this.getChallenge(challengeId);
+    if (!challenge) return null;
+    const row = getOne(db.exec(
+      `SELECT COUNT(*) as count FROM referrals
+       WHERE referrer_telegram_id = ? AND created_at >= ? AND created_at <= ?`,
+      [String(tgId), challenge.start_time, challenge.end_time]
+    ));
+    const myCount = row ? row.count : 0;
+    if (myCount === 0) return { rank: null, count: 0, total: 0 };
+    const total = getCount(db.exec(
+      `SELECT COUNT(DISTINCT referrer_telegram_id) FROM referrals WHERE created_at >= ? AND created_at <= ?`,
+      [challenge.start_time, challenge.end_time]
+    ));
+    return { rank: null, count: myCount, total };
   },
 
   createMessage(userId, tgId, content, status = 'pending') {
