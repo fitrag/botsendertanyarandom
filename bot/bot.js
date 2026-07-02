@@ -109,19 +109,28 @@ function initBot(token) {
     return link.startsWith('http') ? link : 'https://' + link;
   }
 
-  async function showMainMenu(chatId) {
+function getDailyRemaining(tgId) {
+    const dailyLimit = parseInt(db.getSetting('daily_limit') || '0');
+    if (dailyLimit <= 0) return '';
+    const used = db.getDailyMessageCount(tgId);
+    const remaining = Math.max(0, dailyLimit - used);
+    return `\n\n📊 Pesan hari ini: *${used}/${dailyLimit}* — *${remaining} tersisa*`;
+  }
+
+  async function showMainMenu(chatId, tgId) {
     const isPaid = db.getSetting('paid_message_enabled') === 'true';
     const cost = parseInt(db.getSetting('message_cost') || '5000');
     const paidLabel = isPaid ? `\n💰 Biaya: *Rp${cost.toLocaleString('id-ID')}* / pesan` : '';
+    const dailyInfo = tgId ? getDailyRemaining(tgId) : '';
     return sendClean(chatId,
-      `📋 *Menu Utama*${paidLabel}\n\nSilakan pilih menu di bawah:`,
+      `📋 *Menu Utama*${paidLabel}${dailyInfo}\n\nSilakan pilih menu di bawah:`,
       {
         parse_mode: 'Markdown',
         reply_markup: {
           inline_keyboard: [
             [{ text: '✏️ Kirim Pesan', callback_data: 'menu_write' }],
             [{ text: '💰 Cek Saldo', callback_data: 'menu_balance' }, { text: '📋 Status Kiriman', callback_data: 'check_status' }],
-[{ text: '🔗 Referral', callback_data: 'menu_referral' }, { text: '💳 Top-Up', callback_data: 'menu_topup' }],
+            [{ text: '🔗 Referral', callback_data: 'menu_referral' }, { text: '💳 Top-Up', callback_data: 'menu_topup' }],
             [{ text: '❓ Bantuan', callback_data: 'show_help' }, { text: '📞 Support', callback_data: 'menu_support' }]
           ]
         }
@@ -244,10 +253,12 @@ function initBot(token) {
       sendHelp(chatId);
     } else if (data === 'set_gender_laki') {
       db.setGender(query.from.id, 'male');
+      db.assignDefaultAvatar(query.from.id, 'male');
       bot.sendMessage(chatId, `✅ Jenis kelamin disimpan: *Laki-laki* 🧑`, { parse_mode: 'Markdown' });
       setTimeout(() => showMainMenu(chatId), 400);
     } else if (data === 'set_gender_perempuan') {
       db.setGender(query.from.id, 'female');
+      db.assignDefaultAvatar(query.from.id, 'female');
       bot.sendMessage(chatId, `✅ Jenis kelamin disimpan: *Perempuan* 👩`, { parse_mode: 'Markdown' });
       setTimeout(() => showMainMenu(chatId), 400);
     } else if (data.startsWith('topup_')) {
@@ -260,8 +271,9 @@ function initBot(token) {
       createTopupPayment(chatId, query.from.id, amount, slug);
     } else if (data === 'menu_write') {
       writeMode.add(fromId);
+      const dailyRemaining = getDailyRemaining(query.from.id);
       sendClean(chatId,
-        `✏️ *Tulis Pesan*\n\nSilakan ketik pesan yang ingin kamu kirim ke channel.\n\n_Pesanmu akan direview admin terlebih dahulu._\n\n📌 Ketik *batal* untuk keluar.`,
+        `✏️ *Tulis Pesan*\n\nSilakan ketik pesan yang ingin kamu kirim ke channel.\n\n_Pesanmu akan direview admin terlebih dahulu._${dailyRemaining}\n\n📌 Ketik *batal* untuk keluar.`,
         {
           parse_mode: 'Markdown',
           reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'menu_cancel_write' }]] }
@@ -540,8 +552,9 @@ function initBot(token) {
         const text = msg.text.replace(/^\/kirim(@\w+)?\s*/i, '').trim();
         if (!text) {
           writeMode.add(String(from.id));
+          const dailyRemaining = getDailyRemaining(from.id);
           sendClean(chatId,
-            `✏️ *Tulis Pesan*\n\nSilakan ketik pesan yang ingin kamu kirim ke channel.\n\n📌 Ketik *batal* untuk keluar.`,
+            `✏️ *Tulis Pesan*\n\nSilakan ketik pesan yang ingin kamu kirim ke channel.${dailyRemaining}\n\n📌 Ketik *batal* untuk keluar.`,
             {
               parse_mode: 'Markdown',
               reply_markup: { inline_keyboard: [[{ text: '❌ Batal', callback_data: 'menu_cancel_write' }]] }
@@ -588,6 +601,11 @@ function initBot(token) {
     if (!user.gender) {
       askGender(chatId);
       return;
+    }
+
+    // Assign default avatar if user doesn't have one yet
+    if (user.gender && !db.getUserActiveAvatar(from.id)) {
+      db.assignDefaultAvatar(from.id, user.gender);
     }
 
     // ── WRITE MODE CHECK ──
@@ -704,6 +722,23 @@ function initBot(token) {
           db.deductBalance(from.id, messageCost);
         }
 
+        // ── USERNAME IMPERSONATION CHECK ──
+        const mentionedUsernames = text.match(/@(\w+)/gi);
+        if (mentionedUsernames) {
+          const senderUsername = (from.username || '').toLowerCase();
+          for (const mention of mentionedUsernames) {
+            const mentioned = mention.replace('@', '').toLowerCase();
+            if (mentioned && mentioned !== senderUsername) {
+              bot.sendMessage(chatId,
+                `⚠️ *Username Tidak Sesuai*\n\nKamu menyebutkan *@${mentioned}* dalam pesanmu, tetapi itu bukan username Telegram kamu.\n\nKami tidak mengizinkan pembuatan menfess palsu atau scam dengan menggunakan username orang lain.\n\n❌ Silakan kirim ulang tanpa username orang lain.`,
+                { parse_mode: 'Markdown' }
+              );
+              showMainMenu(chatId);
+              return;
+            }
+          }
+        }
+
         // ── CHECK AUTO-POST / VIP ──
         const autoPost = db.getSetting('auto_post') === 'true';
         const isVip = autoPost || (user.is_vip && (!user.vip_expires_at || new Date(user.vip_expires_at + 'Z') > new Date()));
@@ -720,6 +755,20 @@ function initBot(token) {
         }
         ts.push(now);
         rateLimitMap.set(key, ts);
+
+        // ── DAILY LIMIT ──
+        const dailyLimit = parseInt(db.getSetting('daily_limit') || '0');
+        if (dailyLimit > 0) {
+          const dailyCount = db.getDailyMessageCount(from.id);
+          if (dailyCount >= dailyLimit) {
+            bot.sendMessage(chatId,
+              `📊 *Batas Harian Tercapai*\n\nKamu sudah mengirim *${dailyLimit} pesan* hari ini.\n\nSilakan coba lagi besok.`,
+              { parse_mode: 'Markdown' }
+            );
+            showMainMenu(chatId);
+            return;
+          }
+        }
 
         // ── POST MESSAGE ──
         const content = text;
@@ -744,7 +793,8 @@ function initBot(token) {
           );
           notifyAdmin(msgId, user, content);
         }
-        showMainMenu(chatId);
+        db.incrementDailyMessage(from.id);
+        showMainMenu(chatId, from.id);
         return;
       } else {
         // Not in write mode — show main menu
@@ -813,15 +863,29 @@ async function postToChannel(message, customHashtag) {
     content = topTags.join(' ') + '\n\n' + content;
   }
 
-  // Append username + footer at the bottom
+  // Append footer at the bottom
   const parts = [];
-  if (message.username && message.username !== '') parts.push('@' + message.username);
   const footer = db.getSetting('channel_footer');
   if (footer) parts.push(footer);
   const suffix = parts.length ? '\n\n' + parts.join(' | ') : '';
 
+  const caption = content + suffix;
+
   try {
-    return await bot.sendMessage(channelId, content + suffix);
+    let avatarUrl = message.user_id ? db.getUserActiveAvatar(db.getUserById(message.user_id)?.telegram_id) : null;
+    if (avatarUrl && avatarUrl.startsWith('/')) {
+      const base = process.env.WEBAPP_URL || '';
+      avatarUrl = base ? base + avatarUrl : null;
+    }
+    if (avatarUrl) {
+      try {
+        return await bot.sendPhoto(channelId, avatarUrl, { caption, parse_mode: 'Markdown' });
+      } catch (photoErr) {
+        console.error('⚠️ sendPhoto gagal, fallback ke sendMessage:', photoErr.message);
+        return await bot.sendMessage(channelId, caption);
+      }
+    }
+    return await bot.sendMessage(channelId, caption);
   } catch (err) {
     console.error('❌ Gagal posting ke channel:', err.message);
     console.error('   Channel ID yang digunakan:', channelId);
@@ -886,4 +950,20 @@ async function postAnnouncement(text, shouldPin) {
   return sent;
 }
 
-module.exports = { initBot, getBot, postToChannel, notifyUser, deleteFromChannel, postAnnouncement };
+async function postBroadcast(text) {
+  const allUsers = db.getAllTelegramIds();
+  let sent = 0, failed = 0;
+  for (const tgId of allUsers) {
+    try {
+      await bot.sendMessage(tgId, text, { parse_mode: 'Markdown' });
+      sent++;
+    } catch(e) {
+      failed++;
+    }
+    // Small delay to avoid hitting Telegram rate limits (30 msg/sec)
+    if (sent % 25 === 0) await new Promise(r => setTimeout(r, 1000));
+  }
+  return { sent, failed, total: allUsers.length };
+}
+
+module.exports = { initBot, getBot, postToChannel, notifyUser, deleteFromChannel, postAnnouncement, postBroadcast };

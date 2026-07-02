@@ -191,12 +191,18 @@ router.post('/support-tickets/:id/close', (req, res) => {
 
 // Announcement
 router.post('/announcement', async (req, res) => {
-  const { text, pin } = req.body || {};
+  const { text, pin, target } = req.body || {};
   if (!text || !text.trim()) return res.status(400).json({ error: 'Teks pengumuman diperlukan' });
   try {
-    const { postAnnouncement } = require('../bot/bot');
-    await postAnnouncement(text.trim(), pin === true);
-    res.json({ success: true });
+    if (target === 'bot') {
+      const { postBroadcast } = require('../bot/bot');
+      const result = await postBroadcast(text.trim());
+      res.json({ success: true, ...result });
+    } else {
+      const { postAnnouncement } = require('../bot/bot');
+      await postAnnouncement(text.trim(), pin === true);
+      res.json({ success: true });
+    }
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
@@ -222,6 +228,30 @@ router.post('/challenges', (req, res) => {
 
 router.post('/challenges/:id/end', (req, res) => {
   db.endChallenge(req.params.id);
+  res.json({ success: true });
+});
+
+// Avatar Management
+router.get('/avatars', (req, res) => {
+  res.json({ avatars: db.getAvatars() });
+});
+
+router.post('/avatars', (req, res) => {
+  const { name, price, image_url } = req.body || {};
+  if (!name || !image_url) return res.status(400).json({ error: 'Nama dan URL gambar diperlukan' });
+  db.addAvatar(name, price || 0, image_url);
+  res.json({ success: true });
+});
+
+router.put('/avatars/:id', (req, res) => {
+  const { name, price, image_url } = req.body || {};
+  if (!name || !image_url) return res.status(400).json({ error: 'Nama dan URL gambar diperlukan' });
+  db.updateAvatar(req.params.id, name, price || 0, image_url);
+  res.json({ success: true });
+});
+
+router.delete('/avatars/:id', (req, res) => {
+  db.deleteAvatar(req.params.id);
   res.json({ success: true });
 });
 

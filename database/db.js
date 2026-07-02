@@ -53,6 +53,8 @@ async function initDb() {
   try { db.run('ALTER TABLE users ADD COLUMN referral_balance INTEGER DEFAULT 0'); } catch(e) {}
   try { db.run('ALTER TABLE users ADD COLUMN gender TEXT'); } catch(e) {}
   try { db.run('ALTER TABLE users ADD COLUMN balance INTEGER DEFAULT 0'); } catch(e) {}
+  try { db.run('ALTER TABLE users ADD COLUMN daily_message_count INTEGER DEFAULT 0'); } catch(e) {}
+  try { db.run('ALTER TABLE users ADD COLUMN daily_message_date TEXT'); } catch(e) {}
   // Migrate referral_balance into balance if exists
   try {
     const rbRows = getRows(db.exec('SELECT telegram_id, referral_balance FROM users WHERE COALESCE(referral_balance, 0) > 0'));
@@ -173,6 +175,44 @@ async function initDb() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS avatars (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    price INTEGER NOT NULL DEFAULT 0,
+    image_url TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS user_avatars (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id TEXT NOT NULL,
+    avatar_id INTEGER NOT NULL,
+    is_active INTEGER DEFAULT 0,
+    purchased_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (avatar_id) REFERENCES avatars(id)
+  )`);
+
+  try { db.run('ALTER TABLE users ADD COLUMN active_avatar_url TEXT'); } catch(e) {}
+
+  // Seed avatars
+  const avatarCount = getCount(db.exec('SELECT COUNT(*) FROM avatars'));
+  if (avatarCount === 0) {
+    const avatars = [
+      ['Avatar Pria (Default)', 0, 'https://ui-avatars.com/api/?name=Pria&size=300&background=b6e3f4&color=1e40af&format=png&bold=true'],
+      ['Avatar Wanita (Default)', 0, 'https://ui-avatars.com/api/?name=Wanita&size=300&background=ffdfbf&color=c2410c&format=png&bold=true'],
+      ['Avatar Kucing', 5000, 'https://ui-avatars.com/api/?name=Cat&size=300&background=c0aede&color=4c1d95&format=png&bold=true'],
+      ['Avatar Keren', 10000, 'https://ui-avatars.com/api/?name=Cool&size=300&background=1e1e2e&color=f8fafc&format=png&bold=true'],
+      ['Avatar Anime', 15000, 'https://ui-avatars.com/api/?name=Anime&size=300&background=ffb6c1&color=9d174d&format=png&bold=true'],
+      ['Avatar Gaming', 20000, 'https://ui-avatars.com/api/?name=Gamer&size=300&background=7c3aed&color=faf5ff&format=png&bold=true'],
+      ['Avatar Premium', 30000, 'https://ui-avatars.com/api/?name=VIP&size=300&background=f59e0b&color=78350f&format=png&bold=true']
+    ];
+avatars.forEach(a => db.run('INSERT INTO avatars (name, price, image_url) VALUES (?, ?, ?)', [a[0], a[1], a[2]]));
+  }
+
+  // Migration: reset old external avatar URLs so users get default avatars from DB
+  db.run("UPDATE users SET active_avatar_url = NULL WHERE active_avatar_url LIKE '%dicebear%' OR active_avatar_url LIKE '%pravatar%' OR active_avatar_url LIKE '%ui-avatars%'");
+  db.run("DELETE FROM user_avatars WHERE avatar_id IN (SELECT id FROM avatars WHERE image_url LIKE '%dicebear%' OR image_url LIKE '%pravatar%' OR image_url LIKE '%ui-avatars%')");
+
   try { db.run('CREATE INDEX IF NOT EXISTS idx_msg_status ON messages(status)'); } catch(e) {}
   try { db.run('CREATE INDEX IF NOT EXISTS idx_msg_uid ON messages(user_id)'); } catch(e) {}
   try { db.run('CREATE INDEX IF NOT EXISTS idx_msg_created ON messages(created_at)'); } catch(e) {}
@@ -192,7 +232,7 @@ async function initDb() {
     approve_message: '✅ Pesanmu telah disetujui dan diposting ke channel!',
     reject_message: '❌ Maaf, pesanmu tidak disetujui oleh admin.',
     help_message: '📝 Cara menggunakan bot:\\n\\n1. Dari Menu Utama, klik Kirim Pesan\\n2. Tulis pesan yang ingin dikirim\\n3. Admin akan mereview pesanmu\\n4. Jika disetujui, pesan diposting ke channel\\n\\nGunakan /menu untuk kembali ke menu utama.',
-    channel_id: '', rate_limit: '5', maintenance_mode: 'false', port: '3000',
+    channel_id: '', rate_limit: '5', daily_limit: '0', maintenance_mode: 'false', port: '3000',
     channel_footer: '', channel_link: '', notify_admin: 'true', notify_comments: 'true',
     auto_post: 'false',
     referral_enabled: 'false',
@@ -253,6 +293,81 @@ module.exports = {
     return getOne(db.exec('SELECT * FROM users WHERE telegram_id = ? OR LOWER(username) = ?', [q, q.toLowerCase()]));
   },
 
+  getAllTelegramIds() {
+    return getRows(db.exec('SELECT telegram_id FROM users')).map(r => r.telegram_id);
+  },
+
+  getAvatars() {
+    return getRows(db.exec('SELECT * FROM avatars ORDER BY price ASC'));
+  },
+
+  addAvatar(name, price, imageUrl) {
+    db.run('INSERT INTO avatars (name, price, image_url) VALUES (?, ?, ?)', [name, price || 0, imageUrl]);
+    saveDb();
+  },
+
+  updateAvatar(id, name, price, imageUrl) {
+    db.run('UPDATE avatars SET name = ?, price = ?, image_url = ? WHERE id = ?', [name, price || 0, imageUrl, Number(id)]);
+    saveDb();
+  },
+
+  deleteAvatar(id) {
+    db.run('DELETE FROM avatars WHERE id = ?', [Number(id)]);
+    db.run('DELETE FROM user_avatars WHERE avatar_id = ?', [Number(id)]);
+    saveDb();
+  },
+
+  getAvatar(id) {
+    return getOne(db.exec('SELECT * FROM avatars WHERE id = ?', [Number(id)]));
+  },
+
+  getUserAvatars(tgId) {
+    return getRows(db.exec('SELECT ua.*, a.name, a.image_url, a.price FROM user_avatars ua JOIN avatars a ON a.id = ua.avatar_id WHERE ua.telegram_id = ? ORDER BY ua.purchased_at DESC', [String(tgId)]));
+  },
+
+  buyAvatar(tgId, avatarId) {
+    const avatar = this.getAvatar(avatarId);
+    if (!avatar) return { error: 'Avatar tidak ditemukan' };
+    const alreadyOwned = getOne(db.exec('SELECT id FROM user_avatars WHERE telegram_id = ? AND avatar_id = ?', [String(tgId), avatarId]));
+    if (alreadyOwned) return { error: 'Kamu sudah memiliki avatar ini' };
+    const balance = this.getUserBalance(tgId);
+    if (balance < avatar.price) return { error: 'Saldo tidak cukup' };
+    db.run('UPDATE users SET balance = COALESCE(balance, 0) - ? WHERE telegram_id = ?', [avatar.price, String(tgId)]);
+    db.run('INSERT INTO user_avatars (telegram_id, avatar_id, is_active) VALUES (?, ?, 1)', [String(tgId), avatarId]);
+    // Deactivate other avatars
+    db.run('UPDATE user_avatars SET is_active = 0 WHERE telegram_id = ? AND avatar_id != ?', [String(tgId), avatarId]);
+    db.run('UPDATE users SET active_avatar_url = ? WHERE telegram_id = ?', [avatar.image_url, String(tgId)]);
+    saveDb();
+    return { success: true };
+  },
+
+  setActiveAvatar(tgId, avatarId) {
+    const owned = getOne(db.exec('SELECT ua.*, a.image_url FROM user_avatars ua JOIN avatars a ON a.id = ua.avatar_id WHERE ua.telegram_id = ? AND ua.avatar_id = ?', [String(tgId), Number(avatarId)]));
+    if (!owned) return { error: 'Avatar tidak ditemukan di koleksimu' };
+    db.run('UPDATE user_avatars SET is_active = 0 WHERE telegram_id = ?', [String(tgId)]);
+    db.run('UPDATE user_avatars SET is_active = 1 WHERE id = ?', [owned.id]);
+    db.run('UPDATE users SET active_avatar_url = ? WHERE telegram_id = ?', [owned.image_url, String(tgId)]);
+    saveDb();
+    return { success: true };
+  },
+
+  getUserActiveAvatar(tgId) {
+    const row = getOne(db.exec('SELECT ua.*, a.image_url FROM user_avatars ua JOIN avatars a ON a.id = ua.avatar_id WHERE ua.telegram_id = ? AND ua.is_active = 1', [String(tgId)]));
+    return row ? row.image_url : null;
+  },
+
+  assignDefaultAvatar(tgId, gender) {
+    const hasAvatar = getOne(db.exec('SELECT id FROM user_avatars WHERE telegram_id = ? AND is_active = 1', [String(tgId)]));
+    if (hasAvatar) return;
+    const avatarName = gender === 'female' ? 'Avatar Cewek Default' : 'Avatar Cowok Default';
+    let avatar = getOne(db.exec('SELECT * FROM avatars WHERE name = ? AND price = 0 LIMIT 1', [avatarName]));
+    if (!avatar) avatar = getOne(db.exec('SELECT * FROM avatars WHERE price = 0 LIMIT 1'));
+    if (!avatar) return;
+    db.run('INSERT INTO user_avatars (telegram_id, avatar_id, is_active) VALUES (?, ?, 1)', [String(tgId), avatar.id]);
+    db.run('UPDATE users SET active_avatar_url = ? WHERE telegram_id = ?', [avatar.image_url, String(tgId)]);
+    saveDb();
+  },
+
   transferBalance(senderTgId, receiverTgId, amount) {
     const senderBalance = this.getUserBalance(senderTgId);
     if (senderBalance < amount) return null;
@@ -262,6 +377,25 @@ module.exports = {
       [String(senderTgId), String(receiverTgId), amount]);
     saveDb();
     return true;
+  },
+
+  getDailyMessageCount(tgId) {
+    const today = new Date().toISOString().slice(0, 10);
+    const user = this.getUser(tgId);
+    if (!user) return 0;
+    if (user.daily_message_date !== today) return 0;
+    return user.daily_message_count || 0;
+  },
+
+  incrementDailyMessage(tgId) {
+    const today = new Date().toISOString().slice(0, 10);
+    const user = this.getUser(tgId);
+    if (!user || user.daily_message_date !== today) {
+      db.run('UPDATE users SET daily_message_count = 1, daily_message_date = ? WHERE telegram_id = ?', [today, String(tgId)]);
+    } else {
+      db.run('UPDATE users SET daily_message_count = COALESCE(daily_message_count, 0) + 1 WHERE telegram_id = ?', [String(tgId)]);
+    }
+    saveDb();
   },
 
   createOrUpdateUser(tgId, username, firstName, lastName) {
@@ -464,6 +598,10 @@ cancelTopupTransaction(orderId) {
     return { tickets: getRows(db.exec(q, p)), total, page, limit, totalPages: Math.ceil(total / limit) };
   },
 
+  getUserSupportTickets(telegramId) {
+    return getRows(db.exec('SELECT * FROM support_tickets WHERE telegram_id = ? ORDER BY created_at DESC', [String(telegramId)]));
+  },
+
   getSupportTicket(id) {
     return getOne(db.exec('SELECT * FROM support_tickets WHERE id = ?', [Number(id)]));
   },
@@ -506,28 +644,32 @@ cancelTopupTransaction(orderId) {
   getChallengeLeaderboard(challengeId, limit = 10) {
     const challenge = this.getChallenge(challengeId);
     if (!challenge) return [];
+    const start = (challenge.start_time || '').replace('T', ' ').replace(/\.\d+Z$/,'').replace('Z','');
+    const end = (challenge.end_time || '').replace('T', ' ').replace(/\.\d+Z$/,'').replace('Z','');
     return getRows(db.exec(
       `SELECT r.referrer_telegram_id, u.first_name, u.username, COUNT(*) as count
        FROM referrals r LEFT JOIN users u ON u.telegram_id = r.referrer_telegram_id
        WHERE r.created_at >= ? AND r.created_at <= ?
        GROUP BY r.referrer_telegram_id ORDER BY count DESC LIMIT ?`,
-      [challenge.start_time, challenge.end_time, limit]
+      [start, end, limit]
     ));
   },
 
   getUserChallengeRank(challengeId, tgId) {
     const challenge = this.getChallenge(challengeId);
     if (!challenge) return null;
+    const start = (challenge.start_time || '').replace('T', ' ').replace(/\.\d+Z$/,'').replace('Z','');
+    const end = (challenge.end_time || '').replace('T', ' ').replace(/\.\d+Z$/,'').replace('Z','');
     const row = getOne(db.exec(
       `SELECT COUNT(*) as count FROM referrals
        WHERE referrer_telegram_id = ? AND created_at >= ? AND created_at <= ?`,
-      [String(tgId), challenge.start_time, challenge.end_time]
+      [String(tgId), start, end]
     ));
     const myCount = row ? row.count : 0;
     if (myCount === 0) return { rank: null, count: 0, total: 0 };
     const total = getCount(db.exec(
       `SELECT COUNT(DISTINCT referrer_telegram_id) FROM referrals WHERE created_at >= ? AND created_at <= ?`,
-      [challenge.start_time, challenge.end_time]
+      [start, end]
     ));
     return { rank: null, count: myCount, total };
   },

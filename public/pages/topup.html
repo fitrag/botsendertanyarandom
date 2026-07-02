@@ -2,161 +2,149 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Top-Up Saldo</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.400.0/dist/umd/lucide.min.js"></script>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--tg-theme-bg-color, #fff);
-      color: var(--tg-theme-text-color, #1a1a2e);
-      min-height: 100vh;
-      padding: 0 20px 32px;
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      background:var(--tg-theme-bg-color,#fff);
+      color:var(--tg-theme-text-color,#1a1a2e);
+      min-height:100vh;padding-bottom:80px;-webkit-font-smoothing:antialiased;
     }
-    .container { max-width: 420px; margin: 0 auto; }
-    .header { text-align: center; padding: 28px 0 20px; }
-    .header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; justify-content: center; gap: 8px; }
-    .header p { font-size: 13px; color: var(--tg-theme-hint-color, #8e8e93); margin-top: 4px; }
+    .page{display:none;padding:0 16px 16px;min-height:calc(100vh - 80px)}
+    .page.active{display:block}
+    .header{padding:28px 16px 16px;text-align:center}
+    .header h1{font-size:20px;font-weight:800;letter-spacing:-0.3px;display:flex;align-items:center;justify-content:center;gap:8px}
+    .header p{font-size:12px;color:var(--tg-theme-hint-color,#8e8e93);margin-top:2px}
+    .balance-strip{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 16px;margin:0 16px 16px;background:linear-gradient(135deg,#8b5cf6,#6366f1);border-radius:16px;color:#fff;box-shadow:0 4px 20px rgba(139,92,246,.25)}
+    .balance-strip .amount{font-size:22px;font-weight:800;letter-spacing:-0.5px}
+    .balance-strip .label{font-size:10px;opacity:.7;text-transform:uppercase;letter-spacing:.5px}
+    .balance-strip .hint{font-size:10px;opacity:.5}
 
-    .balance-card {
-      background: linear-gradient(135deg, #8b5cf6, #6366f1);
-      border-radius: 18px; padding: 20px 22px; color: #fff; margin-bottom: 22px;
-      box-shadow: 0 4px 24px rgba(139,92,246,.25);
+    .section{margin-bottom:18px}
+    .section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;color:var(--tg-theme-hint-color,#8e8e93)}
+    .card{background:var(--tg-theme-secondary-bg-color,#f2f2f7);border-radius:18px;padding:18px;margin-bottom:12px}
+
+    .amount-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .amount-btn{
+      padding:14px 8px;border-radius:14px;border:1.5px solid var(--tg-theme-secondary-bg-color,#e8e8ed);
+      background:var(--tg-theme-bg-color,#fff);font-size:14px;font-weight:600;
+      color:var(--tg-theme-text-color,#1a1a2e);cursor:pointer;transition:all .15s;text-align:center;
     }
-    .balance-card .label { font-size: 11px; opacity: .75; text-transform: uppercase; letter-spacing: .8px; font-weight: 600; }
-    .balance-card .amount { font-size: 30px; font-weight: 800; margin: 4px 0; letter-spacing: -0.8px; }
-    .balance-card .hint { font-size: 11px; opacity: .65; }
+    .amount-btn:active,.amount-btn.selected{background:#8b5cf6;color:#fff;border-color:#8b5cf6;box-shadow:0 2px 12px rgba(139,92,246,.3)}
 
-    .section { margin-bottom: 18px; }
-    .section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 10px; color: var(--tg-theme-hint-color, #8e8e93); }
-
-    .amount-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-    .amount-btn {
-      padding: 14px 8px; border-radius: 14px; border: 1.5px solid var(--tg-theme-secondary-bg-color, #e8e8ed);
-      background: var(--tg-theme-secondary-bg-color, #f2f2f7); font-size: 14px; font-weight: 600;
-      color: var(--tg-theme-text-color, #1a1a2e); cursor: pointer; transition: all .15s; text-align: center;
+    .input{
+      width:100%;padding:14px 16px;border-radius:14px;border:1.5px solid var(--tg-theme-secondary-bg-color,#e8e8ed);
+      background:var(--tg-theme-bg-color,#fff);font-size:15px;font-weight:600;
+      color:var(--tg-theme-text-color,#1a1a2e);outline:none;margin-top:8px;transition:border-color .15s;
     }
-    .amount-btn:hover { border-color: #8b5cf6; }
-    .amount-btn.selected { background: #8b5cf6; color: #fff; border-color: #8b5cf6; box-shadow: 0 2px 12px rgba(139,92,246,.3); }
+    .input:focus{border-color:#8b5cf6}
 
-    .custom-input {
-      width: 100%; padding: 14px 16px; border-radius: 14px; border: 1.5px solid var(--tg-theme-secondary-bg-color, #e8e8ed);
-      background: var(--tg-theme-secondary-bg-color, #f2f2f7); font-size: 15px; font-weight: 600;
-      color: var(--tg-theme-text-color, #1a1a2e); outline: none; margin-top: 8px; transition: border-color .15s;
+    .btn{
+      width:100%;padding:15px;border-radius:14px;border:none;background:linear-gradient(135deg,#8b5cf6,#6366f1);
+      color:#fff;font-size:15px;font-weight:700;cursor:pointer;transition:opacity .15s,transform .1s;
+      box-shadow:0 4px 18px rgba(139,92,246,.3);display:flex;align-items:center;justify-content:center;gap:8px;
     }
-    .custom-input:focus { border-color: #8b5cf6; }
-
-    .method-list { display: flex; flex-wrap: wrap; gap: 8px; }
-    .method-btn {
-      padding: 10px 16px; border-radius: 12px; border: 1.5px solid var(--tg-theme-secondary-bg-color, #e8e8ed);
-      background: var(--tg-theme-secondary-bg-color, #f2f2f7); font-size: 12px; font-weight: 600;
-      color: var(--tg-theme-text-color, #1a1a2e); cursor: pointer; transition: all .15s;
-      display: inline-flex; align-items: center; gap: 6px;
+    .btn:active{transform:scale(.98)}.btn:disabled{opacity:.5;transform:none}
+    .btn-outline{
+      background:transparent;color:var(--tg-theme-destructive-text-color,#ef4444);box-shadow:none;
+      border:1.5px solid var(--tg-theme-destructive-text-color,#ef4444);margin-top:8px;
     }
-    .method-btn:hover { border-color: #8b5cf6; }
-    .method-btn.selected { background: #8b5cf6; color: #fff; border-color: #8b5cf6; }
-
-    .primary-btn {
-      width: 100%; padding: 16px; border-radius: 14px; border: none; background: linear-gradient(135deg, #8b5cf6, #6366f1);
-      color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; transition: opacity .15s, transform .1s;
-      box-shadow: 0 4px 18px rgba(139,92,246,.3); letter-spacing: -0.2px;
-      display: flex; align-items: center; justify-content: center; gap: 8px;
-    }
-    .primary-btn:active { transform: scale(.98); }
-    .primary-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
-
-    .payment-card {
-      background: var(--tg-theme-secondary-bg-color, #f2f2f7); border-radius: 18px; padding: 22px; margin-top: 20px;
-    }
-    .payment-card .method-label { font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: .5px; color: var(--tg-theme-hint-color, #8e8e93); margin-bottom: 8px; }
-    .payment-card .total { font-size: 28px; font-weight: 800; margin-bottom: 16px; letter-spacing: -0.5px; }
-
-    .qr-wrapper { display: flex; justify-content: center; margin: 16px 0; }
-    .qr-wrapper img { border-radius: 14px; background: #fff; padding: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.06); width: 200px; height: 200px; }
-
-    .expiry { font-size: 11px; color: var(--tg-theme-hint-color, #8e8e93); text-align: center; margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 4px; }
-
-    .error-msg { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 12px 16px; border-radius: 12px; font-size: 13px; margin-top: 12px; }
-    .hidden { display: none !important; }
-    .spinner { display: inline-block; width: 20px; height: 20px; border: 2.5px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .btn-secondary {
-      width: 100%; padding: 16px; border-radius: 14px; border: 1.5px solid var(--tg-theme-destructive-text-color, #ef4444);
-      background: transparent; color: var(--tg-theme-destructive-text-color, #ef4444); font-size: 15px; font-weight: 700;
-      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px;
+    .btn-ghost{
+      background:var(--tg-theme-secondary-bg-color,#f2f2f7);color:var(--tg-theme-text-color,#1a1a2e);
+      box-shadow:none;margin-top:8px;
     }
 
-    .lucide { width: 16px; height: 16px; flex-shrink: 0; }
-    .lucide-sm { width: 13px; height: 13px; flex-shrink: 0; }
-    .lucide-lg { width: 20px; height: 20px; flex-shrink: 0; }
-    .lucide-xl { width: 42px; height: 42px; flex-shrink: 0; color: #fff; }
+    .qr-wrapper{display:flex;justify-content:center;margin:16px 0}
+    .qr-wrapper img{border-radius:14px;background:#fff;padding:10px;box-shadow:0 2px 12px rgba(0,0,0,.06);width:200px;height:200px}
+    .expiry{font-size:11px;color:var(--tg-theme-hint-color);text-align:center;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:4px}
+    .error-msg{background:#fef2f2;border:1px solid #fecaca;color:#dc2626;padding:12px 16px;border-radius:12px;font-size:13px;margin-top:12px}
+    .success-msg{background:#d1fae5;border:1px solid #a7f3d0;color:#059669;padding:12px 16px;border-radius:12px;font-size:13px;margin-bottom:12px;text-align:center;font-weight:600}
 
-    .tabs { display: flex; gap: 0; margin-bottom: 20px; background: var(--tg-theme-secondary-bg-color, #f2f2f7); border-radius: 12px; padding: 3px; }
-    .tab-btn { flex: 1; padding: 10px; border-radius: 10px; border: none; background: transparent; font-size: 13px; font-weight: 600; color: var(--tg-theme-hint-color, #8e8e93); cursor: pointer; transition: all .15s; }
-    .tab-btn.active { background: #fff; color: #8b5cf6; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    .tx-item{background:var(--tg-theme-secondary-bg-color,#f2f2f7);border-radius:14px;padding:14px 16px;margin-bottom:8px;cursor:pointer;transition:opacity .15s}
+    .tx-item:active{opacity:.7}
+    .tx-row{display:flex;justify-content:space-between;align-items:center}
+    .tx-amount{font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px}
+    .tx-meta{font-size:11px;color:var(--tg-theme-hint-color);margin-top:4px;display:flex;justify-content:space-between}
 
-    .tx-item { background: var(--tg-theme-secondary-bg-color, #f2f2f7); border-radius: 14px; padding: 14px 16px; margin-bottom: 8px; cursor: pointer; transition: opacity .15s; }
-    .tx-item:active { opacity: .7; }
-    .tx-row { display: flex; justify-content: space-between; align-items: center; }
-    .tx-amount { font-size: 16px; font-weight: 700; }
-    .tx-status { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 8px; }
-    .tx-status.completed { background: #d1fae5; color: #059669; }
-    .tx-status.pending { background: #fef3c7; color: #d97706; }
-    .tx-status.cancelled { background: #fee2e2; color: #dc2626; }
-    .tx-meta { font-size: 11px; color: var(--tg-theme-hint-color, #8e8e93); margin-top: 4px; display: flex; justify-content: space-between; }
+    .badge{font-size:10px;font-weight:600;padding:3px 10px;border-radius:8px}
+    .badge-completed{background:#d1fae5;color:#059669}
+    .badge-pending{background:#fef3c7;color:#d97706}
+    .badge-cancelled{background:#fee2e2;color:#dc2626}
 
-    .detail-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--tg-theme-secondary-bg-color, #e8e8ed); }
-    .detail-row:last-child { border-bottom: none; }
-    .detail-label { font-size: 12px; color: var(--tg-theme-hint-color, #8e8e93); }
-    .detail-value { font-size: 13px; font-weight: 600; text-align: right; }
+    .detail-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--tg-theme-secondary-bg-color,#e8e8ed)}
+    .detail-row:last-child{border-bottom:none}
+    .detail-label{font-size:12px;color:var(--tg-theme-hint-color,#8e8e93);display:flex;align-items:center;gap:4px}
+    .detail-value{font-size:13px;font-weight:600;text-align:right}
+
+    .shop-card{display:flex;align-items:center;gap:12px;background:var(--tg-theme-secondary-bg-color,#f2f2f7);border-radius:16px;padding:14px;margin-bottom:10px}
+    .shop-card img{width:56px;height:56px;border-radius:14px;flex-shrink:0}
+    .shop-btn{padding:8px 16px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;border:none;flex-shrink:0}
+    .shop-btn-buy{background:#8b5cf6;color:#fff}
+    .shop-btn-owned{background:#d1fae5;color:#059669;font-size:11px;padding:6px 12px}
+    .shop-btn-use{background:var(--tg-theme-bg-color,#fff);border:1.5px solid #8b5cf6;color:#8b5cf6}
+
+    .hidden{display:none!important}
+    .spinner{display:inline-block;width:20px;height:20px;border:2.5px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite}
+    .spinner-dark{border-color:rgba(139,92,246,.2);border-top-color:#8b5cf6}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    .lucide{width:18px;height:18px;flex-shrink:0}
+    .lucide-sm{width:14px;height:14px;flex-shrink:0}
+    .lucide-lg{width:24px;height:24px;flex-shrink:0}
+    .lucide-xl{width:42px;height:42px;flex-shrink:0;color:#fff}
+
+    /* Bottom Nav */
+    .bottom-nav{
+      position:fixed;bottom:0;left:0;right:0;background:var(--tg-theme-bg-color,#fff);
+      border-top:1px solid var(--tg-theme-secondary-bg-color,#e8e8ed);
+      display:flex;padding:6px 8px max(6px,env(safe-area-inset-bottom));z-index:100;
+    }
+    .nav-item{
+      flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;
+      padding:6px 4px;border:none;background:none;cursor:pointer;transition:all .15s;
+      color:var(--tg-theme-hint-color,#8e8e93);font-size:10px;font-weight:500;
+      border-radius:10px;-webkit-tap-highlight-color:transparent;
+    }
+    .nav-item.active{color:#8b5cf6}
+    .nav-item .nav-dot{width:4px;height:4px;border-radius:50%;background:transparent;transition:background .15s}
+    .nav-item.active .nav-dot{background:#8b5cf6}
   </style>
 </head>
 <body>
-<div class="container">
-  <div class="header">
-    <h1>
-      <i data-lucide="zap" class="lucide"></i>
-      Top-Up Saldo
-    </h1>
-    <p>Isi saldo untuk kirim pesan anonim</p>
-  </div>
+<div class="header">
+  <h1><i data-lucide="zap" class="lucide"></i>Top-Up Saldo</h1>
+  <p>Isi saldo untuk kirim pesan anonim</p>
+</div>
 
-  <div id="notStarted" class="hidden">
-    <div class="payment-card" style="text-align:center;margin-top:20px;padding:40px 22px;">
-      <div style="font-size:56px;margin-bottom:16px;">👋</div>
-      <div style="font-size:18px;font-weight:700;margin-bottom:8px;">Mulai Bot Dulu!</div>
-      <div style="font-size:13px;color:var(--tg-theme-hint-color,#8e8e93);line-height:1.6">
-        Sebelum menggunakan aplikasi ini,<br>
-        silakan buka bot dan ketik <b>/start</b> terlebih dahulu.
-      </div>
-      <button class="primary-btn" style="margin-top:20px;" onclick="if(tg)tg.close()">Tutup</button>
-    </div>
-  </div>
-
-  <div id="mainContent" class="hidden">
-
-  <div class="balance-card" id="balanceCard">
-    <div class="label">Saldo Saat Ini</div>
+<div class="balance-strip" id="balanceCard">
+  <div>
+    <div class="label">Saldo</div>
     <div class="amount" id="balanceAmount">Rp0</div>
-    <div class="hint" id="balanceEstimate"></div>
   </div>
+  <div style="flex:1"></div>
+  <div class="hint" id="balanceEstimate"></div>
+</div>
 
-  <div class="tabs" id="mainTabs">
-    <button class="tab-btn active" onclick="switchTab('topup')" id="tabTopupBtn">Top-Up</button>
-    <button class="tab-btn" onclick="switchTab('send')" id="tabSendBtn" style="display:none">Kirim</button>
-    <button class="tab-btn" onclick="switchTab('history')">Riwayat</button>
-    <button class="tab-btn" onclick="switchTab('referral')" id="tabReferralBtn" style="display:none">Referral</button>
-    <button class="tab-btn" onclick="switchTab('challenge')" id="tabChallengeBtn">Challenge</button>
+<div id="notStarted" class="hidden">
+  <div class="card" style="text-align:center;padding:40px 22px;margin:0 16px;">
+    <div style="font-size:48px;margin-bottom:12px;">👋</div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:8px;">Mulai Bot Dulu!</div>
+    <div style="font-size:13px;color:var(--tg-theme-hint-color,#8e8e93);line-height:1.6">Sebelum menggunakan aplikasi ini, silakan buka bot dan ketik <b>/start</b> terlebih dahulu.</div>
+    <button class="btn btn-ghost" style="margin-top:16px" onclick="if(tg)tg.close()">Tutup</button>
   </div>
+</div>
 
-  <div id="tabTopup">
+<div id="mainContent" class="hidden">
+  <!-- Top-Up Page -->
+  <div class="page active" id="pageTopup">
     <div id="formStep">
       <div class="section">
         <div class="section-title">Nominal Top-Up</div>
-        <div class="amount-grid" id="amountGrid">
+        <div class="amount-grid">
           <button class="amount-btn" data-amount="10000">Rp10K</button>
           <button class="amount-btn" data-amount="25000">Rp25K</button>
           <button class="amount-btn" data-amount="50000">Rp50K</button>
@@ -164,74 +152,46 @@
           <button class="amount-btn" data-amount="150000">Rp150K</button>
           <button class="amount-btn" data-amount="200000">Rp200K</button>
         </div>
-        <input type="number" class="custom-input" id="customAmount" placeholder="Atau masukkan nominal custom..." min="1000" inputmode="numeric">
+        <input type="number" class="input" id="customAmount" placeholder="Nominal custom..." min="1000" inputmode="numeric">
       </div>
-
-      <div class="section">
-        <div class="section-title">Metode Pembayaran</div>
-        <div class="method-list" id="methodList">
-          <button class="method-btn selected" data-method="qris">
-            <i data-lucide="qr-code" class="lucide"></i> QRIS
-          </button>
-        </div>
-      </div>
-
-      <button class="primary-btn" id="payBtn">
-        <span id="payBtnText">Lanjutkan Pembayaran</span>
-      </button>
+      <button class="btn" id="payBtn"><span id="payBtnText">Lanjutkan Pembayaran</span></button>
       <div class="error-msg hidden" id="errorMsg"></div>
     </div>
-
     <div id="paymentStep" class="hidden">
-      <div class="payment-card">
-        <div class="method-label" id="paymentMethodLabel">Pembayaran</div>
-        <div class="total" id="paymentTotal"></div>
-        <div class="qr-wrapper" id="qrWrapper">
-          <img id="qrImage" src="" alt="QR Code">
-        </div>
+      <div class="card" style="text-align:center">
+        <div class="section-title" id="paymentMethodLabel">QRIS</div>
+        <div style="font-size:26px;font-weight:800;margin-bottom:12px" id="paymentTotal"></div>
+        <div class="qr-wrapper"><img id="qrImage" src="" alt="QR"></div>
         <div class="expiry" id="expiryInfo"></div>
       </div>
-      <button class="primary-btn" style="margin-top:16px; background: var(--tg-theme-secondary-bg-color, #f2f2f7); color: var(--tg-theme-text-color, #1a1a2e); box-shadow:none;" onclick="resetForm()">
-        <i data-lucide="arrow-left" class="lucide"></i> Top-Up Lagi
-      </button>
-      <button class="btn-secondary" id="cancelBtn" onclick="cancelPayment()">
-        <i data-lucide="x-circle" class="lucide"></i> Batalkan
-      </button>
+      <button class="btn btn-ghost" onclick="resetForm()"><i data-lucide="arrow-left" class="lucide-sm"></i> Top-Up Lagi</button>
+      <button class="btn btn-outline" id="cancelBtn" onclick="cancelPayment()"><i data-lucide="x-circle" class="lucide-sm"></i> Batalkan</button>
     </div>
-
     <div id="successStep" class="hidden">
-      <div class="payment-card" style="text-align: center;">
-        <div style="width: 72px; height: 72px; border-radius: 50%; background: linear-gradient(135deg, #10b981, #34d399); margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
-          <i data-lucide="check-circle" class="lucide-xl"></i>
-        </div>
-        <div style="font-size: 22px; font-weight: 800; margin-bottom: 4px;">Pembayaran Berhasil!</div>
-        <div style="font-size: 13px; color: var(--tg-theme-hint-color, #8e8e93); margin-bottom: 16px;">Saldo otomatis bertambah</div>
-        <div style="font-size: 28px; font-weight: 800; color: #8b5cf6;" id="successAmount">Rp0</div>
+      <div class="card" style="text-align:center">
+        <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#10b981,#34d399);margin:0 auto 12px;display:flex;align-items:center;justify-content:center"><i data-lucide="check-circle" class="lucide-xl"></i></div>
+        <div style="font-size:20px;font-weight:800">Pembayaran Berhasil!</div>
+        <div style="font-size:12px;color:var(--tg-theme-hint-color)">Saldo otomatis bertambah</div>
+        <div style="font-size:26px;font-weight:800;color:#8b5cf6;margin-top:8px" id="successAmount">Rp0</div>
       </div>
-      <button class="primary-btn" style="margin-top:16px;" onclick="resetForm()">
-        <i data-lucide="arrow-left" class="lucide"></i> Top-Up Lagi
-      </button>
-      <button class="primary-btn" style="margin-top:8px; background: var(--tg-theme-secondary-bg-color, #f2f2f7); color: var(--tg-theme-text-color, #1a1a2e); box-shadow:none;" onclick="if(tg)tg.close()">Tutup</button>
+      <button class="btn" onclick="resetForm()"><i data-lucide="arrow-left" class="lucide-sm"></i> Top-Up Lagi</button>
+      <button class="btn btn-ghost" onclick="if(tg)tg.close()">Tutup</button>
     </div>
-
     <div id="pendingStep" class="hidden">
-      <div class="payment-card" style="text-align: center;">
-        <div class="spinner" style="border-color: rgba(139,92,246,.2); border-top-color: #8b5cf6; width: 48px; height: 48px; margin: 20px auto;"></div>
-        <div style="font-size: 14px; font-weight: 600; color: var(--tg-theme-hint-color, #8e8e93);">Menunggu pembayaran...</div>
+      <div class="card" style="text-align:center">
+        <div class="spinner spinner-dark" style="width:40px;height:40px;margin:16px auto"></div>
+        <div style="font-size:14px;font-weight:600;color:var(--tg-theme-hint-color)">Menunggu pembayaran...</div>
       </div>
     </div>
   </div>
 
-  <div id="tabHistory" class="hidden">
-    <div id="historyList"></div>
-  </div>
-
-  <div id="tabSend" class="hidden">
+  <!-- Kirim Page -->
+  <div class="page" id="pageSend">
     <div class="section">
       <div class="section-title">Kirim Saldo ke Pengguna Lain</div>
-      <input type="text" class="custom-input" id="sendRecipient" placeholder="Telegram ID atau @username penerima..." style="margin-top:0;">
-      <input type="number" class="custom-input" id="sendAmount" placeholder="Jumlah saldo (min Rp1.000)..." min="1000" inputmode="numeric">
-      <div class="amount-grid" style="margin-top:8px;">
+      <input type="text" class="input" id="sendRecipient" placeholder="ID atau @username penerima..." style="margin-top:0">
+      <input type="number" class="input" id="sendAmount" placeholder="Jumlah (min Rp1.000)" min="1000" inputmode="numeric">
+      <div class="amount-grid" style="margin-top:8px">
         <button class="amount-btn send-amt" data-amount="5000">Rp5K</button>
         <button class="amount-btn send-amt" data-amount="10000">Rp10K</button>
         <button class="amount-btn send-amt" data-amount="25000">Rp25K</button>
@@ -240,480 +200,406 @@
       </div>
       <div class="error-msg hidden" id="sendError"></div>
     </div>
-    <button class="primary-btn" id="sendBtn" onclick="sendBalance()">
-      <i data-lucide="send" class="lucide"></i> <span id="sendBtnText">Kirim Saldo</span>
-    </button>
+    <button class="btn" id="sendBtn" onclick="sendBalance()"><i data-lucide="send" class="lucide-sm"></i> <span id="sendBtnText">Kirim Saldo</span></button>
   </div>
 
-  <div id="tabDetail" class="hidden">
-    <button class="primary-btn" style="margin-top:0; margin-bottom:16px; background: var(--tg-theme-secondary-bg-color, #f2f2f7); color: var(--tg-theme-text-color, #1a1a2e); box-shadow:none;" onclick="switchTab('history')">
-      <i data-lucide="arrow-left" class="lucide"></i> Kembali
-    </button>
-    <div class="payment-card" id="detailContent"></div>
-  </div>
-
-  <div id="tabReferral" class="hidden">
-    <div class="payment-card" style="text-align:center;margin-top:0;">
-      <div style="font-size:48px;margin-bottom:12px;">🎁</div>
-      <div style="font-size:20px;font-weight:800;margin-bottom:4px;">Dapatkan Saldo Gratis!</div>
-      <div style="font-size:13px;color:var(--tg-theme-hint-color,#8e8e93);margin-bottom:20px;line-height:1.6">
-        Ajak teman bergabung lewat link referralmu dan dapatkan <b id="refAmount">Rp10.000</b> saldo per orang!
-      </div>
-      <div id="refStats" style="background:var(--tg-theme-bg-color,#fff);border-radius:12px;padding:14px;margin-bottom:16px;">
-        <div style="font-size:24px;font-weight:800;color:#8b5cf6;" id="refCount">0</div>
-        <div style="font-size:11px;color:var(--tg-theme-hint-color,#8e8e93);">Orang berhasil diajak</div>
-      </div>
-      <div style="margin-bottom:16px;">
-        <div style="font-size:11px;color:var(--tg-theme-hint-color,#8e8e93);margin-bottom:6px;">Link Referral Kamu</div>
-        <div id="refLinkBox" style="background:var(--tg-theme-bg-color,#fff);border:2px dashed var(--tg-theme-secondary-bg-color,#e8e8ed);border-radius:12px;padding:14px;font-size:12px;word-break:break-all;color:var(--tg-theme-text-color,#1a1a2e);margin-bottom:8px;" id="refLink">-</div>
-        <button class="primary-btn" style="background:var(--tg-theme-bg-color,#fff);color:#8b5cf6;box-shadow:none;border:1.5px solid #8b5cf6;" onclick="copyRefLink()">
-          <i data-lucide="copy" class="lucide"></i> Salin Link
-        </button>
-      </div>
-      <div style="font-size:11px;color:var(--tg-theme-hint-color,#8e8e93);">
-        Bagikan link di atas ke teman-temanmu!
-      </div>
+  <!-- Toko Page -->
+  <div class="page" id="pageShop">
+    <div class="section">
+      <div class="section-title">Toko Avatar</div>
+      <div id="avatarList"></div>
     </div>
-</div>
-  </div>
-
-  <div id="tabChallenge" class="hidden">
-    <div class="payment-card" style="text-align:center;margin-top:0;">
-      <div id="challengeHeader">
-        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px;"><i data-lucide="trophy" class="lucide-lg" style="color:#f59e0b;"></i></div>
-        <div style="font-size:20px;font-weight:800;margin-bottom:4px;" id="chTitle">-</div>
-        <div style="font-size:12px;color:var(--tg-theme-hint-color,#8e8e93);margin-bottom:4px;" id="chDesc"></div>
-        <div style="font-size:13px;color:#8b5cf6;font-weight:700;margin-bottom:12px;" id="chReward"></div>
-        <div id="chCountdown" style="background:#fef3c7;border-radius:10px;padding:10px;display:inline-block;font-size:13px;font-weight:700;color:#d97706;margin-bottom:8px;">-</div>
-        <div style="font-size:10px;color:var(--tg-theme-hint-color,#8e8e93);margin-bottom:16px;" id="chYourScore"></div>
-      </div>
-      <div id="chNotActive" style="padding:32px 0;color:var(--tg-theme-hint-color,#8e8e93);font-size:13px;display:none;">
-        Tidak ada challenge aktif saat ini
-      </div>
-      <div id="chLeaderboard" style="text-align:left;"></div>
+    <div class="section">
+      <div class="section-title">Koleksi Kamu</div>
+      <div id="collectionList"></div>
     </div>
   </div>
+
+  <!-- Challenge Page -->
+  <div class="page" id="pageChallenge">
+    <div id="chNotActive" style="text-align:center;padding:32px;color:var(--tg-theme-hint-color);font-size:13px;display:none">Tidak ada challenge aktif</div>
+    <div id="chActive">
+      <div class="card" style="text-align:center">
+        <div id="chTitle" style="font-size:18px;font-weight:800;margin-bottom:4px">-</div>
+        <div id="chDesc" style="font-size:12px;color:var(--tg-theme-hint-color);margin-bottom:4px"></div>
+        <div id="chReward" style="font-size:14px;color:#8b5cf6;font-weight:700;margin-bottom:10px"></div>
+        <div id="chCountdown" style="background:#fef3c7;border-radius:10px;padding:10px;display:inline-block;font-size:13px;font-weight:700;color:#d97706">-</div>
+        <div id="chYourScore" style="font-size:10px;color:var(--tg-theme-hint-color);margin-top:8px"></div>
+      </div>
+      <div class="section-title" style="margin-top:16px">🏆 Leaderboard</div>
+      <div id="chLeaderboard"></div>
+    </div>
+  </div>
+
+  <!-- Riwayat Page -->
+  <div class="page" id="pageHistory">
+    <div id="historyList"></div>
+    <div id="historyDetail" class="hidden">
+      <button class="btn btn-ghost" style="margin-bottom:12px" onclick="showHistoryList()"><i data-lucide="arrow-left" class="lucide-sm"></i> Kembali</button>
+      <div class="card" id="detailContent"></div>
+    </div>
+  </div>
+
+  <!-- Referral Page -->
+  <div class="page" id="pageReferral">
+    <div class="card" style="text-align:center">
+      <div style="font-size:48px;margin-bottom:8px">🎁</div>
+      <div style="font-size:18px;font-weight:800;margin-bottom:4px">Dapatkan Saldo Gratis!</div>
+      <div style="font-size:12px;color:var(--tg-theme-hint-color);margin-bottom:16px">Ajak teman dapat <b id="refAmount">Rp10.000</b> saldo</div>
+      <div style="background:var(--tg-theme-bg-color,#fff);border-radius:12px;padding:12px;margin-bottom:12px">
+        <div style="font-size:22px;font-weight:800;color:#8b5cf6" id="refCount">0</div>
+        <div style="font-size:10px;color:var(--tg-theme-hint-color)">Orang berhasil diajak</div>
+      </div>
+      <div id="refLinkBox" style="background:var(--tg-theme-bg-color,#fff);border:2px dashed #e8e8ed;border-radius:12px;padding:12px;font-size:11px;word-break:break-all;margin-bottom:8px">-</div>
+      <button class="btn" style="background:var(--tg-theme-bg-color,#fff);color:#8b5cf6;box-shadow:none;border:1.5px solid #8b5cf6" onclick="copyRefLink()"><i data-lucide="copy" class="lucide-sm"></i> Salin Link</button>
+    </div>
+  </div>
 </div>
+
+<nav class="bottom-nav" id="bottomNav">
+  <button class="nav-item active" data-page="topup"><i data-lucide="wallet" class="lucide"></i><span>Top-Up</span><div class="nav-dot"></div></button>
+  <button class="nav-item" data-page="send" id="navSend"><i data-lucide="send-horizonal" class="lucide"></i><span>Kirim</span><div class="nav-dot"></div></button>
+  <button class="nav-item" data-page="shop" id="navShop"><i data-lucide="shopping-bag" class="lucide"></i><span>Toko</span><div class="nav-dot"></div></button>
+  <button class="nav-item" data-page="challenge" id="navChallenge"><i data-lucide="trophy" class="lucide"></i><span>Challenge</span><div class="nav-dot"></div></button>
+  <button class="nav-item" data-page="history"><i data-lucide="clock" class="lucide"></i><span>Riwayat</span><div class="nav-dot"></div></button>
+</nav>
 
 <script>
-function refreshIcons() { if (window.lucide) lucide.createIcons(); }
-document.addEventListener('DOMContentLoaded', () => setTimeout(refreshIcons, 100));
+function refreshIcons(){if(window.lucide)lucide.createIcons()}
+document.addEventListener('DOMContentLoaded',()=>setTimeout(refreshIcons,100));
 
-const tg = window.Telegram?.WebApp;
-let tgUser = null;
-let userExists = false;
+const tg=window.Telegram?.WebApp;let tgUser=null,userExists=false;
+if(tg){tg.ready();tg.expand();tgUser=tg.initDataUnsafe?.user}
 
-if (tg) {
-  tg.ready();
-  tg.expand();
-  tgUser = tg.initDataUnsafe?.user;
-}
-
-async function checkUser() {
-  const tid = tgUser?.id || new URLSearchParams(window.location.search).get('tid');
-  if (!tid) return;
-  try {
-    const res = await fetch('/api/pakasir/balance/' + tid);
-    const data = await res.json();
-    if (data.exists) {
-      userExists = true;
+// Check user
+async function checkUser(){
+  const tid=tgUser?.id||new URLSearchParams(location.search).get('tid');
+  if(!tid)return;
+  try{
+    const r=await fetch('/api/pakasir/balance/'+tid);
+    const d=await r.json();
+    if(d.exists){
+      userExists=true;
       document.getElementById('mainContent').classList.remove('hidden');
       document.getElementById('notStarted').classList.add('hidden');
-      document.getElementById('tabSendBtn').style.display = data.transfer_enabled ? '' : 'none';
-      if (data.miniapp_enabled) {
-        document.getElementById('tabTopupBtn').style.display = '';
-        document.getElementById('tabReferralBtn').style.display = 'none';
-      } else {
-        document.getElementById('tabTopupBtn').style.display = 'none';
-        if (data.referral_enabled) {
-          document.getElementById('tabReferralBtn').style.display = '';
-          switchTab('referral');
-        }
+      document.getElementById('navSend').style.display=d.transfer_enabled?'':'none';
+      if(d.miniapp_enabled){
+        document.getElementById('navSend').style.display=d.transfer_enabled?'':'none';
+      }else{
+        document.getElementById('pageTopup').classList.add('hidden');
+        document.getElementById('navSend').style.display='none';
+        if(d.referral_enabled)navigateTo('referral');
       }
       loadBalance();
-    } else {
-      userExists = false;
+    }else{
       document.getElementById('mainContent').classList.add('hidden');
       document.getElementById('notStarted').classList.remove('hidden');
     }
-  } catch(e) {}
+  }catch(e){}
 }
 checkUser();
 
-let selectedAmount = 0;
-let selectedMethod = 'qris';
-
-async function loadBalance() {
-  try {
-    const tid = tgUser?.id || new URLSearchParams(window.location.search).get('tid');
-    if (!tid) { document.getElementById('balanceAmount').textContent = 'Rp0'; return; }
-    const res = await fetch(`/api/pakasir/balance/${tid}`);
-    const data = await res.json();
-    document.getElementById('balanceAmount').textContent = 'Rp' + (data.balance || 0).toLocaleString('id-ID');
-    const cost = data.message_cost || 5000;
-    const est = Math.floor((data.balance || 0) / cost);
-    document.getElementById('balanceEstimate').textContent = est > 0 ? '≈ ' + est + ' pesan' : '';
-  } catch(e) {}
+// Navigation
+function navigateTo(page){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const pg=document.getElementById('page'+page.charAt(0).toUpperCase()+page.slice(1));
+  if(pg)pg.classList.add('active');
+  const nav=document.querySelector(`.nav-item[data-page="${page}"]`);
+  if(nav)nav.classList.add('active');
+  if(page==='topup')resetForm();
+  else if(page==='history')loadHistory();
+  else if(page==='send')resetSendForm();
+  else if(page==='challenge')loadChallenge();
+  else if(page==='shop')loadShop();
+  else if(page==='referral')loadReferral();
+  refreshIcons();
 }
-loadBalance();
+document.querySelectorAll('.nav-item').forEach(b=>b.addEventListener('click',()=>navigateTo(b.dataset.page)));
 
-document.querySelectorAll('.amount-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    selectedAmount = +btn.dataset.amount;
-    document.getElementById('customAmount').value = '';
-    document.getElementById('errorMsg').classList.add('hidden');
-  });
+// Balance
+async function loadBalance(){
+  const tid=tgUser?.id||new URLSearchParams(location.search).get('tid');
+  if(!tid)return;
+  try{
+    const r=await fetch('/api/pakasir/balance/'+tid);
+    const d=await r.json();
+    document.getElementById('balanceAmount').textContent='Rp'+(d.balance||0).toLocaleString('id-ID');
+    const cost=d.message_cost||5000;
+    const est=Math.floor((d.balance||0)/cost);
+    document.getElementById('balanceEstimate').textContent=est>0?'≈ '+est+' pesan':'';
+  }catch(e){}
+}
+
+// ===== TOP-UP =====
+let selectedAmount=0,pollTimer=null,currentOrderId=null;
+document.querySelectorAll('#pageTopup .amount-btn').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#pageTopup .amount-btn').forEach(x=>x.classList.remove('selected'));
+  b.classList.add('selected');selectedAmount=+b.dataset.amount;
+  document.getElementById('customAmount').value='';document.getElementById('errorMsg').classList.add('hidden');
+}));
+document.getElementById('customAmount').addEventListener('input',e=>{
+  document.querySelectorAll('#pageTopup .amount-btn').forEach(x=>x.classList.remove('selected'));
+  selectedAmount=+e.target.value;document.getElementById('errorMsg').classList.add('hidden');
 });
-
-document.getElementById('customAmount').addEventListener('input', e => {
-  document.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('selected'));
-  selectedAmount = +e.target.value;
-  document.getElementById('errorMsg').classList.add('hidden');
-});
-
-document.getElementById('payBtn').addEventListener('click', async () => {
-  const customVal = parseInt(document.getElementById('customAmount').value);
-  if (customVal >= 1000) selectedAmount = customVal;
-  if (!selectedAmount || selectedAmount < 1000) { showError('Pilih nominal minimal Rp1.000'); return; }
-
-  const tid = tgUser?.id || new URLSearchParams(window.location.search).get('tid');
-  if (!tid) { showError('Tidak dapat membaca identitas pengguna'); return; }
-
-  const btn = document.getElementById('payBtn');
-  const btnText = document.getElementById('payBtnText');
-  btn.disabled = true;
-  btnText.innerHTML = '<span class="spinner"></span> Membuat transaksi...';
-
-  try {
-    const res = await fetch('/api/pakasir/create-transaction', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: selectedAmount, method: selectedMethod, telegram_id: String(tid) })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Gagal membuat transaksi');
-
+document.getElementById('payBtn').addEventListener('click',async()=>{
+  const cv=parseInt(document.getElementById('customAmount').value);
+  if(cv>=1000)selectedAmount=cv;
+  if(!selectedAmount||selectedAmount<1000){showError('Minimal Rp1.000');return}
+  const tid=tgUser?.id||new URLSearchParams(location.search).get('tid');
+  if(!tid){showError('ID tidak ditemukan');return}
+  const btn=document.getElementById('payBtn'),bt=document.getElementById('payBtnText');
+  btn.disabled=true;bt.innerHTML='<span class="spinner"></span> Membuat...';
+  try{
+    const r=await fetch('/api/pakasir/create-transaction',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:selectedAmount,method:'qris',telegram_id:String(tid)})});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'Gagal');
     document.getElementById('formStep').classList.add('hidden');
     document.getElementById('paymentStep').classList.remove('hidden');
-    document.getElementById('paymentTotal').textContent = 'Rp' + data.total_payment.toLocaleString('id-ID');
-    document.getElementById('paymentMethodLabel').textContent = 'QRIS';
-    document.getElementById('qrImage').src = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(data.payment_number);
-    if (data.expired_at) {
-      const exp = new Date(data.expired_at).toLocaleString('id-ID', { hour:'2-digit', minute:'2-digit', day:'numeric', month:'short' });
-      document.getElementById('expiryInfo').innerHTML = '<i data-lucide="clock" class="lucide-sm"></i> Bayar sebelum ' + exp;
+    document.getElementById('paymentTotal').textContent='Rp'+d.total_payment.toLocaleString('id-ID');
+    document.getElementById('qrImage').src='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(d.payment_number);
+    if(d.expired_at){
+      const exp=new Date(d.expired_at).toLocaleString('id-ID',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'});
+      document.getElementById('expiryInfo').innerHTML='<i data-lucide="clock" class="lucide-sm"></i> Bayar sebelum '+exp;
     }
-    refreshIcons();
-    startPolling(data.order_id, data.amount);
-  } catch(e) {
-    showError(e.message);
-    btn.disabled = false;
-    btnText.textContent = 'Lanjutkan Pembayaran';
-  }
+    refreshIcons();startPolling(d.order_id,d.amount);
+  }catch(e){showError(e.message);btn.disabled=false;bt.textContent='Lanjutkan Pembayaran'}
 });
-
-let pollTimer = null;
-let currentOrderId = null;
-
-function startPolling(orderId, amount) {
-  currentOrderId = orderId;
-  let tries = 0; const maxTries = 20;
-  if (pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(async () => {
-    tries++;
-    try {
-      const res = await fetch('/api/pakasir/transaction-status/' + encodeURIComponent(orderId));
-      const data = await res.json();
-      if (data.status === 'completed') {
-        clearInterval(pollTimer); pollTimer = null;
+function startPolling(oid,amt){
+  currentOrderId=oid;let n=0;if(pollTimer)clearInterval(pollTimer);
+  pollTimer=setInterval(async()=>{n++;
+    try{
+      const r=await fetch('/api/pakasir/transaction-status/'+encodeURIComponent(oid));
+      const d=await r.json();
+      if(d.status==='completed'){clearInterval(pollTimer);pollTimer=null;
         document.getElementById('paymentStep').classList.add('hidden');
         document.getElementById('pendingStep').classList.add('hidden');
         document.getElementById('successStep').classList.remove('hidden');
-        document.getElementById('successAmount').textContent = 'Rp' + amount.toLocaleString('id-ID');
-        refreshIcons();
-      }
-    } catch(e) {}
-    if (tries >= maxTries) {
-      clearInterval(pollTimer); pollTimer = null;
+        document.getElementById('successAmount').textContent='Rp'+amt.toLocaleString('id-ID');refreshIcons()}
+    }catch(e){}
+    if(n>=20){clearInterval(pollTimer);pollTimer=null;
       document.getElementById('paymentStep').classList.add('hidden');
-      document.getElementById('pendingStep').classList.remove('hidden');
-    }
-  }, 3000);
+      document.getElementById('pendingStep').classList.remove('hidden')}
+  },3000)
 }
-
-function showError(msg) { const el = document.getElementById('errorMsg'); el.textContent = msg; el.classList.remove('hidden'); }
-
-async function cancelPayment() {
-  if (!currentOrderId) return;
-  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-  const btn = document.getElementById('cancelBtn'); btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Membatalkan...';
-  try { await fetch('/api/pakasir/cancel-transaction', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_id: currentOrderId }) }); } catch(e) {}
-  currentOrderId = null;
-  resetForm();
+function showError(m){const e=document.getElementById('errorMsg');e.textContent=m;e.classList.remove('hidden')}
+async function cancelPayment(){
+  if(!currentOrderId)return;if(pollTimer){clearInterval(pollTimer);pollTimer=null}
+  const btn=document.getElementById('cancelBtn');btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Membatalkan...';
+  try{await fetch('/api/pakasir/cancel-transaction',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({order_id:currentOrderId})})}catch(e){}
+  currentOrderId=null;resetForm()
 }
-
-function resetForm() {
-  currentOrderId = null;
-  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+function resetForm(){
+  currentOrderId=null;if(pollTimer){clearInterval(pollTimer);pollTimer=null}
   document.getElementById('formStep').classList.remove('hidden');
   document.getElementById('paymentStep').classList.add('hidden');
   document.getElementById('successStep').classList.add('hidden');
   document.getElementById('pendingStep').classList.add('hidden');
-  document.getElementById('payBtn').disabled = false;
-  document.getElementById('payBtnText').textContent = 'Lanjutkan Pembayaran';
+  document.getElementById('payBtn').disabled=false;
+  document.getElementById('payBtnText').textContent='Lanjutkan Pembayaran';
   document.getElementById('errorMsg').classList.add('hidden');
-  loadBalance();
-  refreshIcons();
+  loadBalance();refreshIcons()
 }
 
-let activeTab = 'topup';
-
-function switchTab(tab) {
-  activeTab = tab;
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  const btn = document.querySelector(`.tab-btn[onclick*="switchTab('${tab}')"]`);
-  if (btn) btn.classList.add('active');
-  document.getElementById('tabTopup').classList.toggle('hidden', tab !== 'topup');
-  document.getElementById('tabHistory').classList.toggle('hidden', tab !== 'history');
-  document.getElementById('tabSend').classList.toggle('hidden', tab !== 'send');
-  document.getElementById('tabDetail').classList.toggle('hidden', tab !== 'detail');
-  document.getElementById('tabReferral').classList.toggle('hidden', tab !== 'referral');
-  document.getElementById('tabChallenge').classList.toggle('hidden', tab !== 'challenge');
-  if (tab === 'topup') resetForm();
-  else if (tab === 'history') loadHistory();
-  else if (tab === 'send') resetSendForm();
-  else if (tab === 'referral') loadReferral();
-  else if (tab === 'challenge') loadChallenge();
-  refreshIcons();
+// ===== KIRIM =====
+let sendSelAmt=0;
+document.querySelectorAll('.send-amt').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.send-amt').forEach(x=>x.classList.remove('selected'));
+  b.classList.add('selected');sendSelAmt=+b.dataset.amount;
+  document.getElementById('sendAmount').value='';document.getElementById('sendError').classList.add('hidden')
+}));
+document.getElementById('sendAmount').addEventListener('input',e=>{
+  sendSelAmt=+e.target.value;document.querySelectorAll('.send-amt').forEach(x=>x.classList.remove('selected'));
+  document.getElementById('sendError').classList.add('hidden')
+});
+function resetSendForm(){
+  sendSelAmt=0;document.getElementById('sendRecipient').value='';
+  document.getElementById('sendAmount').value='';document.getElementById('sendError').classList.add('hidden');
+  document.getElementById('sendBtn').disabled=false;document.getElementById('sendBtnText').textContent='Kirim Saldo'
 }
-
-async function loadHistory() {
-  const el = document.getElementById('historyList');
-  el.innerHTML = '<div style="text-align:center;padding:40px 0"><div class="spinner" style="border-color:rgba(139,92,246,.2);border-top-color:#8b5cf6;width:32px;height:32px;margin:0 auto;"></div></div>';
-  const tid = tgUser?.id || new URLSearchParams(window.location.search).get('tid');
-  if (!tid) { el.innerHTML = '<div class="tx-item" style="text-align:center;color:var(--tg-theme-hint-color)">Tidak dapat memuat riwayat</div>'; return; }
-  try {
-    const res = await fetch('/api/pakasir/history/' + tid);
-    const data = await res.json();
-    if (!data.history.length) { el.innerHTML = '<div class="tx-item" style="text-align:center;color:var(--tg-theme-hint-color);padding:32px">Belum ada riwayat top-up</div>'; return; }
-    el.innerHTML = data.history.map(tx => `
-      <div class="tx-item" onclick="showDetail('${tx.order_id}')">
-        <div class="tx-row">
-          <span class="tx-amount" style="display:flex;align-items:center;gap:8px;color:${tx.status==='completed'?'#8b5cf6':'#8e8e93'}">
-            <i data-lucide="credit-card" class="lucide"></i> Rp${tx.amount.toLocaleString('id-ID')}
-          </span>
-          <span class="tx-status ${tx.status}">${tx.status==='completed'?'Berhasil':tx.status==='cancelled'?'Dibatalkan':'Pending'}</span>
-        </div>
-        <div class="tx-meta">
-          <span>${tx.payment_method ? tx.payment_method.toUpperCase() : '-'}</span>
-          <span>${new Date(tx.created_at+'Z').toLocaleDateString('id-ID',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
-        </div>
-      </div>`).join('');
-    refreshIcons();
-  } catch(e) { el.innerHTML = '<div class="tx-item" style="text-align:center;color:#dc2626">Gagal memuat riwayat</div>'; }
+async function sendBalance(){
+  const tid=tgUser?.id||new URLSearchParams(location.search).get('tid');
+  if(!tid){showSendError('ID tidak ditemukan');return}
+  let rcp=document.getElementById('sendRecipient').value.replace(/^@/,'').trim();
+  const ca=parseInt(document.getElementById('sendAmount').value);
+  const amt=ca>=1000?ca:sendSelAmt;
+  if(!rcp){showSendError('Masukkan ID/@username penerima');return}
+  if(!/^[a-zA-Z0-9_]+$/.test(rcp)){showSendError('Format tidak valid');return}
+  if(!amt||amt<1000){showSendError('Minimal Rp1.000');return}
+  const btn=document.getElementById('sendBtn'),bt=document.getElementById('sendBtnText');
+  btn.disabled=true;bt.innerHTML='<span class="spinner"></span> Mengirim...';
+  try{
+    const r=await fetch('/api/pakasir/transfer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({telegram_id:String(tid),recipient:rcp,amount:amt})});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'Gagal');
+    resetSendForm();loadBalance();
+    document.getElementById('balanceCard').insertAdjacentHTML('afterend','<div class="success-msg" id="sendSuccess">✅ Transfer Rp'+amt.toLocaleString('id-ID')+' ke '+(d.receiverName||rcp)+' berhasil!</div>');
+    setTimeout(()=>{const e=document.getElementById('sendSuccess');if(e)e.remove()},4000)
+  }catch(e){showSendError(e.message);btn.disabled=false;bt.textContent='Kirim Saldo'}
 }
+function showSendError(m){const e=document.getElementById('sendError');e.textContent=m;e.classList.remove('hidden')}
 
-async function showDetail(orderId) {
-  switchTab('detail');
-  const el = document.getElementById('detailContent');
-  el.innerHTML = '<div style="text-align:center;padding:30px"><div class="spinner" style="border-color:rgba(139,92,246,.2);border-top-color:#8b5cf6;width:32px;height:32px;margin:0 auto;"></div></div>';
-  try {
-    const res = await fetch('/api/pakasir/detail/' + encodeURIComponent(orderId));
-    const tx = await res.json();
-    if (res.status===404) { el.innerHTML = '<div style="color:var(--tg-theme-hint-color);text-align:center;padding:20px">Transaksi tidak ditemukan</div>'; return; }
-    const sc = { completed:'#059669', pending:'#d97706', cancelled:'#dc2626' };
-    const ic = { completed:'check-circle', pending:'clock', cancelled:'x-circle' };
-    const sl = { completed:'Berhasil', pending:'Menunggu', cancelled:'Dibatalkan' };
-    el.innerHTML = `
-      <div style="text-align:center;margin-bottom:16px;font-size:24px;font-weight:800;color:${sc[tx.status]||'#8e8e93'};display:flex;align-items:center;justify-content:center;gap:10px">
-        <i data-lucide="${ic[tx.status]||'help-circle'}" class="lucide-lg"></i> ${sl[tx.status]||tx.status}
-      </div>
-      <div class="detail-row"><span class="detail-label"><i data-lucide="banknote" class="lucide-sm"></i> Jumlah</span><span class="detail-value">Rp${tx.amount.toLocaleString('id-ID')}</span></div>
-      <div class="detail-row"><span class="detail-label"><i data-lucide="hash" class="lucide-sm"></i> Order ID</span><span class="detail-value" style="font-size:11px;word-break:break-all">${tx.order_id}</span></div>
-      <div class="detail-row"><span class="detail-label"><i data-lucide="credit-card" class="lucide-sm"></i> Metode</span><span class="detail-value">${(tx.payment_method||'-').toUpperCase()}</span></div>
-      <div class="detail-row"><span class="detail-label"><i data-lucide="calendar" class="lucide-sm"></i> Tanggal</span><span class="detail-value">${new Date(tx.created_at+'Z').toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'})}</span></div>
-      ${tx.completed_at?`<div class="detail-row"><span class="detail-label"><i data-lucide="check" class="lucide-sm"></i> Selesai</span><span class="detail-value">${new Date(tx.completed_at+'Z').toLocaleDateString('id-ID',{day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'})}</span></div>`:''}`;
-    refreshIcons();
-  } catch(e) { el.innerHTML = '<div style="color:#dc2626;text-align:center;padding:20px">Gagal memuat detail</div>'; }
+// ===== TOKO =====
+async function loadShop(){
+  const tid=tgUser?.id||new URLSearchParams(location.search).get('tid');
+  loadAvatars(tid);loadCollection(tid)
 }
-
-let sendSelectedAmount = 0;
-
-document.querySelectorAll('.send-amt').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.send-amt').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    sendSelectedAmount = +btn.dataset.amount;
-    document.getElementById('sendAmount').value = '';
-    document.getElementById('sendError').classList.add('hidden');
+async function loadAvatars(tid){
+  const el=document.getElementById('avatarList');el.innerHTML='<div style="text-align:center;padding:20px"><div class="spinner spinner-dark" style="width:24px;height:24px;margin:0 auto"></div></div>';
+  try{
+    const r=await fetch('/api/pakasir/avatars'+(tid?'?tid='+tid:''));
+    const d=await r.json();if(!d.avatars.length){el.innerHTML='<div style="text-align:center;padding:20px;color:var(--tg-theme-hint-color)">Belum ada avatar</div>';return}
+    el.innerHTML=d.avatars.map(a=>`<div class="shop-card"><img src="${a.image_url}"><div style="flex:1"><div style="font-size:14px;font-weight:700">${esc(a.name)}</div><div style="font-size:11px;color:var(--tg-theme-hint-color)">${a.price>0?'Rp'+a.price.toLocaleString('id-ID'):'Gratis'}</div></div>${a.owned?'<span class="shop-btn shop-btn-owned">Dimiliki</span>':'<button class="shop-btn shop-btn-buy" onclick="buyAvatar('+a.id+','+a.price+',\''+esc(a.name)+'\')">Beli</button>'}</div>`).join('')
+  }catch(e){el.innerHTML='<div style="text-align:center;color:#dc2626;padding:12px">Gagal memuat</div>'}
+}
+async function loadCollection(tid){
+  const el=document.getElementById('collectionList');el.innerHTML='<div style="text-align:center;padding:20px"><div class="spinner spinner-dark" style="width:24px;height:24px;margin:0 auto"></div></div>';
+  try{
+    const r=await fetch('/api/pakasir/my-avatars/'+tid);
+    const d=await r.json();if(!d.avatars.length){el.innerHTML='<div style="text-align:center;padding:16px;color:var(--tg-theme-hint-color);font-size:12px">Kamu belum punya avatar</div>';return}
+    el.innerHTML=d.avatars.map(a=>`<div class="shop-card"><img src="${a.image_url}"><div style="flex:1"><div style="font-size:14px;font-weight:700">${esc(a.name)}</div><div style="font-size:10px;color:var(--tg-theme-hint-color)">${a.is_active?'🔵 Dipakai':''}</div></div>${!a.is_active?`<button class="shop-btn shop-btn-use" onclick="setActiveAvatar(${a.avatar_id})">Pakai</button>`:''}</div>`).join('')
+  }catch(e){el.innerHTML='<div style="text-align:center;color:#dc2626;padding:12px">Gagal memuat</div>'}
+}
+async function buyAvatar(aid,price,name){
+  const tid=tgUser?.id||new URLSearchParams(location.search).get('tid');
+  if(!tid)return;
+  // Show confirm dialog
+  const overlay=document.createElement('div');
+  overlay.className='confirm-overlay';
+  overlay.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;padding:16px';
+  overlay.innerHTML=`<div style="background:var(--tg-theme-bg-color,#fff);border-radius:20px 20px 12px 12px;padding:24px;width:100%;max-width:420px;animation:slideUp .2s ease">
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="font-size:36px;margin-bottom:8px">🛍️</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:4px">Konfirmasi Pembelian</div>
+      <div style="font-size:13px;color:var(--tg-theme-hint-color,#8e8e93)">Beli avatar <b>${name||'ini'}</b> seharga <b>Rp${price.toLocaleString('id-ID')}</b>?</div>
+      <div style="font-size:11px;color:var(--tg-theme-destructive-text-color,#ef4444);margin-top:6px">Saldo akan otomatis terpotong</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" id="confirmNo" style="margin-top:0">Batal</button>
+      <button class="btn" id="confirmYes" style="margin-top:0">Ya, Beli</button>
+    </div></div>
+  <style>@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}</style>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#confirmNo').addEventListener('click',()=>overlay.remove());
+  overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove()});
+  overlay.querySelector('#confirmYes').addEventListener('click',async()=>{
+    overlay.remove();
+    try{
+      const r=await fetch('/api/pakasir/buy-avatar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({telegram_id:String(tid),avatar_id:aid})});
+      const d=await r.json();if(!r.ok)throw new Error(d.error);
+      loadBalance();loadShop();
+      document.getElementById('balanceCard').insertAdjacentHTML('afterend','<div class="success-msg" id="buyOk">✅ Avatar berhasil dibeli!</div>');
+      setTimeout(()=>{const e=document.getElementById('buyOk');if(e)e.remove()},3000)
+    }catch(e){alert(e.message)}
   });
-});
-
-document.getElementById('sendAmount').addEventListener('input', e => {
-  sendSelectedAmount = +e.target.value;
-  document.querySelectorAll('.send-amt').forEach(b => b.classList.remove('selected'));
-  document.getElementById('sendError').classList.add('hidden');
-});
-
-function resetSendForm() {
-  sendSelectedAmount = 0;
-  document.getElementById('sendRecipient').value = '';
-  document.getElementById('sendAmount').value = '';
-  document.getElementById('sendError').classList.add('hidden');
-  document.getElementById('sendBtn').disabled = false;
-  document.getElementById('sendBtnText').textContent = 'Kirim Saldo';
+}
+async function setActiveAvatar(aid){
+  const tid=tgUser?.id||new URLSearchParams(location.search).get('tid');
+  if(!tid)return;
+  try{await fetch('/api/pakasir/set-active-avatar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({telegram_id:String(tid),avatar_id:aid})});loadShop()}catch(e){alert(e.message)}
 }
 
-async function sendBalance() {
-  const tid = tgUser?.id || new URLSearchParams(window.location.search).get('tid');
-  if (!tid) { showSendError('Tidak dapat membaca identitas'); return; }
+// ===== CHALLENGE =====
+async function loadChallenge(){
+  const tid=tgUser?.id||new URLSearchParams(location.search).get('tid');
+  try{
+    const r=await fetch('/api/pakasir/challenge'+(tid?'?tid='+tid:''));
+    const d=await r.json();
+    document.getElementById('chNotActive').style.display=d.active?'none':'block';
+    document.getElementById('chActive').style.display=d.active?'':'none';
+    if(!d.active)return;
+    const c=d.challenge;
+    document.getElementById('chTitle').textContent=c.title;
+    document.getElementById('chDesc').textContent=c.description||'';
+    document.getElementById('chReward').textContent=c.reward?'🎁 '+c.reward:'';
+    const endStr=String(c.end_time),et=new Date(endStr.endsWith('Z')?endStr:endStr+'Z').getTime();
+    updateCountdown(et);if(window._ci)clearInterval(window._ci);
+    window._ci=setInterval(()=>updateCountdown(et),1000);
+    if(d.userRank)document.getElementById('chYourScore').textContent='Kamu: '+d.userRank.count+' undangan';
+    const lb=d.leaderboard||[];
+    document.getElementById('chLeaderboard').innerHTML=lb.length?lb.map((u,i)=>{const m={0:'🥇',1:'🥈',2:'🥉'};return`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--tg-theme-secondary-bg-color,#e8e8ed)"><span style="font-size:18px;width:28px;text-align:center">${m[i]||(i+1+'.')}</span><div style="flex:1"><div style="font-size:13px;font-weight:600">${esc(u.first_name||'')}</div><div style="font-size:10px;color:var(--tg-theme-hint-color)">${u.username?'@'+esc(u.username):''}</div></div><span style="font-size:13px;font-weight:700;color:#8b5cf6">${u.count} 👥</span></div>`}).join(''):'<div style="text-align:center;padding:16px;color:var(--tg-theme-hint-color);font-size:12px">Belum ada peserta</div>';
+    refreshIcons()
+  }catch(e){}
+}
+function updateCountdown(et){
+  const diff=Math.max(0,et-Date.now());
+  const d=Math.floor(diff/86400000),h=Math.floor((diff%86400000)/3600000),m=Math.floor((diff%3600000)/60000),s=Math.floor((diff%60000)/1000);
+  document.getElementById('chCountdown').textContent='⏳ '+d+' Hari : '+h+' Jam : '+m+' Menit : '+s+' Detik';
+  if(diff<=0){document.getElementById('chCountdown').textContent='🔴 Selesai';if(window._ci){clearInterval(window._ci);window._ci=null}}
+}
 
-  let recipient = document.getElementById('sendRecipient').value.replace(/^@/, '').trim();
-  const customAmount = parseInt(document.getElementById('sendAmount').value);
-  const amount = customAmount >= 1000 ? customAmount : sendSelectedAmount;
+// ===== RIWAYAT =====
+async function loadHistory(){
+  const el=document.getElementById('historyList');document.getElementById('historyDetail').classList.add('hidden');
+  el.innerHTML='<div style="text-align:center;padding:40px 0"><div class="spinner spinner-dark" style="width:28px;height:28px;margin:0 auto"></div></div>';
+  const tid=tgUser?.id||new URLSearchParams(location.search).get('tid');
+  if(!tid){el.innerHTML='<div style="text-align:center;padding:20px;color:var(--tg-theme-hint-color)">Tidak dapat memuat</div>';return}
+  try{
+    const r=await fetch('/api/pakasir/history/'+tid);
+    const d=await r.json();if(!d.history.length){el.innerHTML='<div style="text-align:center;padding:32px;color:var(--tg-theme-hint-color)">Belum ada riwayat</div>';return}
+    el.innerHTML=d.history.map(tx=>`<div class="tx-item" onclick="showDetail('${tx.order_id}')"><div class="tx-row"><span class="tx-amount" style="color:${tx.status==='completed'?'#8b5cf6':'#8e8e93'}"><i data-lucide="credit-card" class="lucide-sm"></i>Rp${tx.amount.toLocaleString('id-ID')}</span><span class="badge badge-${tx.status}">${tx.status==='completed'?'Berhasil':tx.status==='cancelled'?'Dibatalkan':'Pending'}</span></div><div class="tx-meta"><span>${tx.payment_method?tx.payment_method.toUpperCase():'-'}</span><span>${new Date(tx.created_at+'Z').toLocaleDateString('id-ID',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span></div></div>`).join('');
+    refreshIcons()
+  }catch(e){el.innerHTML='<div style="text-align:center;color:#dc2626;padding:12px">Gagal memuat</div>'}
+}
+function showHistoryList(){
+  document.getElementById('historyDetail').classList.add('hidden');
+  loadHistory()
+}
+async function showDetail(oid){
+  document.getElementById('historyList').innerHTML='';
+  document.getElementById('historyDetail').classList.remove('hidden');
+  const el=document.getElementById('detailContent');el.innerHTML='<div style="text-align:center;padding:20px"><div class="spinner spinner-dark" style="width:24px;height:24px;margin:0 auto"></div></div>';
+  try{
+    const r=await fetch('/api/pakasir/detail/'+encodeURIComponent(oid));
+    const tx=await r.json();if(r.status===404){el.innerHTML='<div style="text-align:center;color:var(--tg-theme-hint-color)">Tidak ditemukan</div>';return}
+    const ic={completed:'check-circle',pending:'clock',cancelled:'x-circle'},sc={completed:'#059669',pending:'#d97706',cancelled:'#dc2626'},sl={completed:'Berhasil',pending:'Menunggu',cancelled:'Dibatalkan'};
+    el.innerHTML=`<div style="text-align:center;margin-bottom:12px;font-size:22px;font-weight:800;color:${sc[tx.status]||'#8e8e93'};display:flex;align-items:center;justify-content:center;gap:8px"><i data-lucide="${ic[tx.status]||'help-circle'}"></i>${sl[tx.status]||tx.status}</div>
+      <div class="detail-row"><span class="detail-label"><i data-lucide="banknote" class="lucide-sm"></i>Jumlah</span><span class="detail-value">Rp${tx.amount.toLocaleString('id-ID')}</span></div>
+      <div class="detail-row"><span class="detail-label"><i data-lucide="hash" class="lucide-sm"></i>Order ID</span><span class="detail-value" style="font-size:11px;word-break:break-all">${tx.order_id}</span></div>
+      <div class="detail-row"><span class="detail-label"><i data-lucide="credit-card" class="lucide-sm"></i>Metode</span><span class="detail-value">${(tx.payment_method||'-').toUpperCase()}</span></div>
+      <div class="detail-row"><span class="detail-label"><i data-lucide="calendar" class="lucide-sm"></i>Tanggal</span><span class="detail-value">${new Date(tx.created_at+'Z').toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'})}</span></div>
+      ${tx.completed_at?`<div class="detail-row"><span class="detail-label"><i data-lucide="check" class="lucide-sm"></i>Selesai</span><span class="detail-value">${new Date(tx.completed_at+'Z').toLocaleDateString('id-ID',{day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'})}</span></div>`:''}
+      ${tx.status==='pending'?`<button class="btn btn-outline" style="margin-top:16px" onclick="cancelDetail('${tx.order_id}')"><i data-lucide="x-circle" class="lucide-sm"></i> Batalkan Transaksi</button>`:''}`;
+    refreshIcons()
+  }catch(e){el.innerHTML='<div style="text-align:center;color:#dc2626">Gagal memuat</div>'}
+}
 
-  if (!recipient) { showSendError('Masukkan Telegram ID atau @username penerima'); return; }
-  if (!/^[a-zA-Z0-9_]+$/.test(recipient)) { showSendError('Format ID/username tidak valid. Gunakan huruf, angka, atau underscore saja.'); return; }
-  if (!amount || amount < 1000) { showSendError('Masukkan jumlah minimal Rp1.000'); return; }
-
-  const btn = document.getElementById('sendBtn');
-  const btnText = document.getElementById('sendBtnText');
-  btn.disabled = true;
-  btnText.innerHTML = '<span class="spinner"></span> Mengirim...';
-
+async function cancelDetail(orderId) {
   try {
-    const res = await fetch('/api/pakasir/transfer', {
+    await fetch('/api/pakasir/cancel-transaction', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ telegram_id: String(tid), recipient, amount })
+      body: JSON.stringify({ order_id: orderId })
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Transfer gagal');
-
-    document.getElementById('sendRecipient').value = '';
-    document.getElementById('sendAmount').value = '';
-    sendSelectedAmount = 0;
-    document.querySelectorAll('.send-amt').forEach(b => b.classList.remove('selected'));
-    loadBalance();
-
-    const card = document.getElementById('balanceCard');
-    card.insertAdjacentHTML('afterend', `
-      <div id="sendSuccess" class="payment-card" style="text-align:center;background:#d1fae5;border:1px solid #a7f3d0;margin-bottom:20px;margin-top:0;">
-        <div style="font-size:14px;font-weight:700;color:#059669">✅ Transfer Berhasil!</div>
-        <div style="font-size:12px;color:#065f46;margin-top:2px">Rp${amount.toLocaleString('id-ID')} terkirim ke ${data.receiverName || recipient}</div>
-      </div>`);
-    setTimeout(() => { const el = document.getElementById('sendSuccess'); if (el) el.remove(); }, 4000);
-
-    btn.disabled = false;
-    btnText.textContent = 'Kirim Saldo';
-  } catch(e) {
-    showSendError(e.message);
-    btn.disabled = false;
-    btnText.textContent = 'Kirim Saldo';
-  }
-}
-
-function showSendError(msg) {
-  const el = document.getElementById('sendError');
-  el.textContent = msg;
-  el.classList.remove('hidden');
-}
-
-let refLinkUrl = '';
-
-async function loadReferral() {
-  const tid = tgUser?.id || new URLSearchParams(window.location.search).get('tid');
-  if (!tid) return;
-  try {
-    const res = await fetch('/api/pakasir/referral-link/' + tid);
-    const data = await res.json();
-    document.getElementById('refCount').textContent = data.count;
-    document.getElementById('refAmount').textContent = 'Rp' + data.amount.toLocaleString('id-ID');
-    refLinkUrl = data.link;
-    document.getElementById('refLinkBox').textContent = data.link || '-';
-    refreshIcons();
+    showDetail(orderId);
   } catch(e) {}
 }
 
-function copyRefLink() {
-  if (!refLinkUrl) return;
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(refLinkUrl).then(() => toastCopy());
-  } else if (tg) {
-    tg.copyTextToClipboard(refLinkUrl);
-    toastCopy();
-  }
+// ===== REFERRAL =====
+let refLinkUrl='';
+async function loadReferral(){
+  const tid=tgUser?.id||new URLSearchParams(location.search).get('tid');
+  if(!tid)return;
+  try{
+    const r=await fetch('/api/pakasir/referral-link/'+tid);
+    const d=await r.json();
+    document.getElementById('refCount').textContent=d.count;
+    document.getElementById('refAmount').textContent='Rp'+d.amount.toLocaleString('id-ID');
+    refLinkUrl=d.link;document.getElementById('refLinkBox').textContent=d.link||'-';
+    refreshIcons()
+  }catch(e){}
+}
+function copyRefLink(){
+  if(!refLinkUrl)return;
+  if(navigator.clipboard)navigator.clipboard.writeText(refLinkUrl).then(()=>toastRefCopy());
+  else if(tg){tg.copyTextToClipboard(refLinkUrl);toastRefCopy()}
+}
+function toastRefCopy(){
+  const el=document.getElementById('refLinkBox'),orig=el.textContent;
+  el.textContent='✅ Link disalin!';el.style.borderColor='#8b5cf6';
+  setTimeout(()=>{el.textContent=orig;el.style.borderColor=''},2000)
 }
 
-function toastCopy() {
-  const el = document.getElementById('refLinkBox');
-  const orig = el.textContent;
-  el.textContent = '✅ Link disalin!';
-  el.style.borderColor = '#8b5cf6';
-  setTimeout(() => { el.textContent = orig; el.style.borderColor = ''; }, 2000);
-}
-
-async function loadChallenge() {
-  const tid = tgUser?.id || new URLSearchParams(window.location.search).get('tid');
-  const res = await fetch(`/api/pakasir/challenge${tid ? '?tid=' + tid : ''}`);
-  const data = await res.json();
-
-  document.getElementById('chNotActive').style.display = data.active ? 'none' : 'block';
-  document.getElementById('challengeHeader').style.display = data.active ? '' : 'none';
-  document.getElementById('chLeaderboard').style.display = data.active ? '' : 'none';
-
-  if (!data.active) return;
-
-  const c = data.challenge;
-  document.getElementById('chTitle').textContent = c.title;
-  document.getElementById('chDesc').textContent = c.description || '';
-  document.getElementById('chReward').textContent = c.reward ? '🎁 ' + c.reward : '';
-
-  // Countdown
-  const endStr = String(c.end_time);
-  const endTime = new Date(endStr.endsWith('Z') ? endStr : endStr + 'Z').getTime();
-  updateCountdown(endTime);
-  if (window._chInterval) clearInterval(window._chInterval);
-  window._chInterval = setInterval(() => updateCountdown(endTime), 1000);
-
-  // User score
-  if (data.userRank) {
-    document.getElementById('chYourScore').textContent = `Kamu: ${data.userRank.count} undangan`;
-  }
-
-  // Leaderboard
-  const lb = data.leaderboard || [];
-  if (!lb.length) {
-    document.getElementById('chLeaderboard').innerHTML = '<div style="text-align:center;padding:16px;color:var(--tg-theme-hint-color);font-size:12px">Belum ada peserta</div>';
-  } else {
-    document.getElementById('chLeaderboard').innerHTML = `<div class="method-label" style="margin-bottom:8px;">🏆 Leaderboard</div>` +
-      lb.map((u, i) => {
-        const medals = { 0: '🥇', 1: '🥈', 2: '🥉' };
-        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--tg-theme-secondary-bg-color,#e8e8ed);${i>=lb.length-1?'border-bottom:none;':''}">
-          <span style="font-size:18px;width:30px;text-align:center;">${medals[i] || (i+1+'.')}</span>
-          <div style="flex:1;"><div style="font-size:13px;font-weight:600;">${esc(u.first_name || '')}</div><div style="font-size:10px;color:var(--tg-theme-hint-color);">${u.username ? '@'+esc(u.username) : ''}</div></div>
-          <span style="font-size:13px;font-weight:700;color:#8b5cf6;">${u.count} 👥</span>
-        </div>`;
-      }).join('');
-  }
-  refreshIcons();
-}
-
-function updateCountdown(endTime) {
-  const now = Date.now();
-  const diff = Math.max(0, endTime - now);
-  const d = Math.floor(diff / 86400000);
-  const h = Math.floor((diff % 86400000) / 3600000);
-  const m = Math.floor((diff % 3600000) / 60000);
-  const s = Math.floor((diff % 60000) / 1000);
-  document.getElementById('chCountdown').textContent = `⏳ ${d} Hari : ${h} Jam : ${m} Menit : ${s} Detik`;
-  if (diff <= 0) {
-    document.getElementById('chCountdown').textContent = '🔴 Selesai';
-    if (window._chInterval) { clearInterval(window._chInterval); window._chInterval = null; }
-  }
-}
-
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 </script>
 </body>
 </html>

@@ -8,11 +8,13 @@
     "dev": "node --watch server.js"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.1",
     "express": "^4.18.2",
     "express-session": "^1.17.3",
+    "multer": "^2.2.0",
     "node-telegram-bot-api": "^0.64.0",
-    "sql.js": "^1.10.2",
-    "bcryptjs": "^2.4.3",
-    "dotenv": "^16.4.1"
+    "sharp": "^0.35.2",
+    "sql.js": "^1.10.2"
   }
 }

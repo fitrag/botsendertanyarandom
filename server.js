@@ -2,6 +2,9 @@ require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
+const multer = require('multer');
+const sharp = require('sharp');
+const fs = require('fs');
 
 async function main() {
   // Init database first
@@ -25,10 +28,65 @@ async function main() {
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
   }));
 
+  // Migration: assign default avatars to all users by gender
+  try {
+    const cowok = db.getAvatars().find(a => a.name === 'Avatar Cowok Default' && a.price === 0);
+    const cewek = db.getAvatars().find(a => a.name === 'Avatar Cewek Default' && a.price === 0);
+    if (cowok && cewek) {
+      const users = db.getAllUsers(1, 99999).users;
+      let assigned = 0;
+      users.forEach(u => {
+        if (!u.gender) return;
+        const hasActive = db.getUserActiveAvatar(u.telegram_id);
+        if (hasActive) return;
+        const avatar = u.gender === 'female' ? cewek : cowok;
+        db.assignDefaultAvatar(u.telegram_id, u.gender);
+        assigned++;
+      });
+      if (assigned > 0) console.log(`👤 Default avatars assigned to ${assigned} users`);
+    }
+  } catch(e) { console.error('Avatar migration error:', e.message); }
+  const uploadsDir = path.join(__dirname, 'uploads', 'avatars');
+  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+  const storage = multer.diskStorage({
+    destination: uploadsDir,
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname) || '.jpg';
+      cb(null, 'avatar-' + Date.now() + '-' + Math.round(Math.random() * 1E9) + ext);
+    }
+  });
+  const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Hanya file gambar yang diizinkan'));
+  }});
+
   app.use('/css', express.static(path.join(__dirname, 'public/css')));
   app.use('/js', express.static(path.join(__dirname, 'public/js')));
+  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
   app.get('/topup', (req, res) => res.sendFile(path.join(__dirname, 'public/pages/topup.html')));
+
+  // Avatar upload (admin, but public endpoint since auth handled by session in api.js)
+  app.post('/api/upload-avatar', upload.single('avatar'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'File gambar diperlukan' });
+    try {
+      const originalPath = req.file.path;
+      const compressedPath = originalPath.replace(/(\.\w+)$/, '_thumb$1');
+      await sharp(originalPath)
+        .resize(300, 300, { fit: 'cover' })
+        .jpeg({ quality: 80 })
+        .toFile(compressedPath);
+      // Replace original with compressed
+      fs.unlinkSync(originalPath);
+      fs.renameSync(compressedPath, originalPath);
+      const url = '/uploads/avatars/' + req.file.filename;
+      res.json({ success: true, url });
+    } catch(e) {
+      console.error('Image processing error:', e);
+      res.status(500).json({ error: 'Gagal memproses gambar' });
+    }
+  });
   app.get('/api/pakasir/balance/:tid', (req, res) => {
     const user = db.getUser(req.params.tid);
     if (!user) return res.status(404).json({ error: 'User not found', exists: false });
@@ -79,6 +137,33 @@ async function main() {
     res.json({ active: true, challenge, leaderboard, userRank });
   });
 
+  app.get('/api/pakasir/avatars', (req, res) => {
+    const tid = req.query.tid;
+    const catalog = db.getAvatars();
+    const owned = tid ? db.getUserAvatars(tid).map(a => a.avatar_id) : [];
+    res.json({ avatars: catalog.map(a => ({ ...a, owned: owned.includes(a.id) })) });
+  });
+
+  app.get('/api/pakasir/my-avatars/:tid', (req, res) => {
+    res.json({ avatars: db.getUserAvatars(req.params.tid) });
+  });
+
+  app.post('/api/pakasir/buy-avatar', (req, res) => {
+    const { telegram_id, avatar_id } = req.body || {};
+    if (!telegram_id || !avatar_id) return res.status(400).json({ error: 'Data tidak lengkap' });
+    const result = db.buyAvatar(telegram_id, avatar_id);
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json({ success: true });
+  });
+
+  app.post('/api/pakasir/set-active-avatar', (req, res) => {
+    const { telegram_id, avatar_id } = req.body || {};
+    if (!telegram_id || !avatar_id) return res.status(400).json({ error: 'Data tidak lengkap' });
+    const result = db.setActiveAvatar(telegram_id, avatar_id);
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json({ success: true });
+  });
+
   app.post('/api/pakasir/transfer', async (req, res) => {
     const { telegram_id, amount } = req.body;
     const recipient = (req.body.recipient || '').replace(/^@/, '').trim();
@@ -112,6 +197,56 @@ async function main() {
         ).catch(() => {});
       }
     } catch(e) {}
+  });
+
+  // Support (Mini App)
+  app.get('/api/pakasir/support-tickets', (req, res) => {
+    const { telegram_id } = req.query;
+    if (!telegram_id) return res.status(400).json({ error: 'Telegram ID diperlukan' });
+    res.json({ tickets: db.getUserSupportTickets(telegram_id) });
+  });
+
+  app.get('/api/pakasir/support-tickets/:id', (req, res) => {
+    const ticket = db.getSupportTicket(req.params.id);
+    if (!ticket) return res.status(404).json({ error: 'Tiket tidak ditemukan' });
+    res.json({ ticket, messages: db.getSupportMessages(req.params.id) });
+  });
+
+  app.post('/api/pakasir/support-tickets', async (req, res) => {
+    const { telegram_id, user_name, subject, message } = req.body || {};
+    if (!telegram_id || !subject || !message) return res.status(400).json({ error: 'Data tidak lengkap' });
+    const ticketId = db.createSupportTicket(telegram_id, user_name || String(telegram_id), subject, message);
+    const ticket = db.getSupportTicket(ticketId);
+    try {
+      const bot = require('./bot/bot').getBot();
+      if (bot && process.env.ADMIN_TELEGRAM_ID) {
+        bot.sendMessage(process.env.ADMIN_TELEGRAM_ID,
+          `📞 Tiket Support Baru (Mini App)\n\n🔢 ID: #SUP${ticketId}\n👤 Dari: ${user_name || telegram_id}\n📋 Subjek: ${subject}\n💬 Pesan: ${message.substring(0, 200)}${message.length > 200 ? '...' : ''}\n\nBuka dashboard untuk merespon.`,
+          { parse_mode: 'Markdown' }
+        ).catch(() => {});
+      }
+    } catch(e) {}
+    res.json({ success: true, ticket_id: ticketId });
+  });
+
+  app.post('/api/pakasir/support-tickets/:id/reply', (req, res) => {
+    const { telegram_id, message } = req.body || {};
+    if (!telegram_id || !message) return res.status(400).json({ error: 'Data tidak lengkap' });
+    const ticket = db.getSupportTicket(req.params.id);
+    if (!ticket) return res.status(404).json({ error: 'Tiket tidak ditemukan' });
+    if (ticket.status === 'closed') return res.status(400).json({ error: 'Tiket sudah ditutup' });
+    if (String(ticket.telegram_id) !== String(telegram_id)) return res.status(403).json({ error: 'Akses ditolak' });
+    db.addSupportMessage(req.params.id, 'user', message);
+    res.json({ success: true });
+  });
+
+  app.post('/api/pakasir/support-tickets/:id/close', (req, res) => {
+    const { telegram_id } = req.body || {};
+    const ticket = db.getSupportTicket(req.params.id);
+    if (!ticket) return res.status(404).json({ error: 'Tiket tidak ditemukan' });
+    if (String(ticket.telegram_id) !== String(telegram_id)) return res.status(403).json({ error: 'Akses ditolak' });
+    db.closeSupportTicket(req.params.id);
+    res.json({ success: true });
   });
 
   app.get('/api/pakasir/transaction-status/:order_id', async (req, res) => {

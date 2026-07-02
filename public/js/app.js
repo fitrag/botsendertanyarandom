@@ -32,7 +32,7 @@ document.getElementById('themeToggle').addEventListener('click', () => {
 
 // ===== NAV =====
 let currentPage = 'dashboard';
-const titles = { dashboard: 'Dashboard', messages: 'Kiriman Pesan', users: 'Pengguna', settings: 'Pengaturan', support: 'Support', announcement: 'Pengumuman', challenge: 'Challenge' };
+const titles = { dashboard: 'Dashboard', messages: 'Kiriman Pesan', users: 'Pengguna', settings: 'Pengaturan', support: 'Support', announcement: 'Pengumuman', challenge: 'Challenge', avatars: 'Avatar' };
 const navActive = 'bg-violet-50 dark:bg-violet-600/10 text-violet-600 dark:text-violet-400';
 const navInactive = 'text-slate-500 dark:text-zinc-400';
 
@@ -57,6 +57,7 @@ function navigateTo(page) {
   else if (page === 'support') loadSupport();
   else if (page === 'announcement') resetAnnouncement();
   else if (page === 'challenge') loadChallenges();
+  else if (page === 'avatars') loadAvatarsAdmin();
 }
 
 // ===== LOGOUT =====
@@ -445,7 +446,7 @@ function topupUser(id, name) {
 }
 
 // ===== SETTINGS =====
-const sFields = ['welcome_message','help_message','approve_message','reject_message','channel_id','channel_footer','channel_link','rate_limit','referral_cash_amount','referral_min_referrals','message_cost','pakasir_slug','pakasir_api_key'];
+const sFields = ['welcome_message','help_message','approve_message','reject_message','channel_id','channel_footer','channel_link','rate_limit','daily_limit','referral_cash_amount','referral_min_referrals','message_cost','pakasir_slug','pakasir_api_key'];
 const sToggles = ['maintenance_mode','notify_admin','notify_comments','referral_enabled','auto_post','paid_message_enabled','topup_bot_enabled','topup_miniapp_enabled','transfer_enabled'];
 const sSelects = [];
 
@@ -564,13 +565,13 @@ function resetAnnouncement() {
 document.getElementById('sendAnnouncementBtn').addEventListener('click', async () => {
   const text = document.getElementById('announcementText').value.trim();
   if (!text) {
-    const err = document.getElementById('announcementError');
-    err.textContent = 'Tulis pesan pengumuman terlebih dahulu';
-    err.classList.remove('hidden');
+    document.getElementById('announcementError').classList.remove('hidden');
+    document.getElementById('announcementError').textContent = 'Tulis pesan pengumuman terlebih dahulu';
     return;
   }
 
-  const pin = document.getElementById('pinAnnouncement').checked;
+  const target = document.querySelector('input[name="announceTarget"]:checked')?.value || 'channel';
+  const pin = target === 'channel' && document.getElementById('pinAnnouncement').checked;
   const btn = document.getElementById('sendAnnouncementBtn');
   const err = document.getElementById('announcementError');
   const success = document.getElementById('announcementSuccess');
@@ -580,8 +581,12 @@ document.getElementById('sendAnnouncementBtn').addEventListener('click', async (
   btn.innerHTML = '<div class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Mengirim...';
 
   try {
-    await api('/api/announcement', { method: 'POST', body: { text, pin } });
-    success.textContent = pin ? '✅ Pengumuman terkirim & dipin di channel!' : '✅ Pengumuman terkirim ke channel!';
+    const result = await api('/api/announcement', { method: 'POST', body: { text, pin, target } });
+    if (target === 'bot') {
+      success.textContent = `✅ Broadcast terkirim! ${result.sent} berhasil, ${result.failed} gagal dari ${result.total} pengguna`;
+    } else {
+      success.textContent = pin ? '✅ Pengumuman terkirim & dipin di channel!' : '✅ Pengumuman terkirim ke channel!';
+    }
     success.classList.remove('hidden');
     document.getElementById('announcementText').value = '';
     document.getElementById('pinAnnouncement').checked = false;
@@ -592,6 +597,13 @@ document.getElementById('sendAnnouncementBtn').addEventListener('click', async (
   btn.disabled = false;
   btn.innerHTML = '<i data-lucide="send" class="w-3.5 h-3.5"></i> Kirim Pengumuman';
   lucide.createIcons();
+});
+
+// Show/hide pin section based on target
+document.querySelectorAll('input[name="announceTarget"]').forEach(r => {
+  r.addEventListener('change', () => {
+    document.getElementById('pinSection').style.display = r.value === 'channel' ? '' : 'none';
+  });
 });
 
 // ===== CHALLENGE =====
@@ -705,6 +717,95 @@ async function createChallenge() {
     document.getElementById('challengeModal').classList.add('hidden');
     loadChallenges();
   } catch(e) { toast(e.message, 'error'); }
+}
+
+// ===== AVATAR ADMIN =====
+async function loadAvatarsAdmin() {
+  const el = document.getElementById('avatarListAdmin');
+  el.innerHTML = '<div class="flex justify-center py-16"><div class="w-5 h-5 border-2 border-slate-200 dark:border-zinc-700 border-t-violet-500 rounded-full animate-spin"></div></div>';
+  try {
+    const data = await api('/api/avatars');
+    if (!data.avatars.length) { el.innerHTML = '<div class="text-center py-12 text-slate-400 text-xs">Belum ada avatar</div>'; return; }
+    el.innerHTML = data.avatars.map(a => `
+      <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/60 rounded-2xl p-4 shadow-sm flex items-center gap-4">
+        <img src="${esc(a.image_url)}" style="width:56px;height:56px;border-radius:14px;flex-shrink:0">
+        <div style="flex:1">
+          <div class="text-sm font-bold text-slate-900 dark:text-zinc-100">${esc(a.name)}</div>
+          <div class="text-xs text-slate-500">Rp${a.price.toLocaleString('id-ID')}</div>
+        </div>
+        <div class="flex gap-1.5">
+          <button onclick="showEditAvatar(${a.id},'${esc(a.name)}',${a.price},'${esc(a.image_url)}')" class="px-2.5 py-1 text-[10px] font-semibold text-slate-500 hover:bg-slate-100 rounded-lg">Edit</button>
+          <button onclick="deleteAvatar(${a.id})" class="px-2.5 py-1 text-[10px] font-semibold text-rose-500 hover:bg-rose-50 rounded-lg">Hapus</button>
+        </div>
+      </div>`).join('');
+  } catch(e) { el.innerHTML = `<div class="text-center py-12 text-rose-500 text-xs">${e.message}</div>`; }
+}
+
+function showAddAvatar() {
+  showAvatarForm(null, '', 0, '');
+}
+
+function showEditAvatar(id, name, price, image_url) {
+  showAvatarForm(id, name, price, image_url);
+}
+
+function showAvatarForm(id, name, price, image_url) {
+  const modal = document.getElementById('avatarModal');
+  modal.classList.remove('hidden');
+  modal.innerHTML = `
+    <div class="bg-white dark:bg-zinc-900 border border-slate-200 rounded-2xl p-6 w-full max-w-md shadow-xl">
+      <h3 class="text-sm font-bold mb-4">${id ? 'Edit' : 'Tambah'} Avatar</h3>
+      <div class="space-y-3">
+        <input id="avName" value="${name}" placeholder="Nama avatar" class="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-800 border rounded-xl text-sm outline-none focus:border-violet-500">
+        <input id="avPrice" type="number" value="${price}" placeholder="Harga (Rp)" class="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-800 border rounded-xl text-sm outline-none focus:border-violet-500">
+        ${id ? `<div id="avOldImage" class="text-xs text-slate-400">URL tersimpan: ${esc(image_url)}</div>` : ''}
+        <div><label class="text-[10px] text-slate-500">Upload Gambar</label><input type="file" id="avImage" accept="image/*" class="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-800 border rounded-xl text-sm outline-none focus:border-violet-500 mt-1 file:mr-3 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-violet-50 file:text-violet-600"></div>
+        ${id ? `<input type="hidden" id="avId" value="${id}">` : ''}
+        <input type="hidden" id="avImageUrl" value="${image_url}">
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button onclick="document.getElementById('avatarModal').classList.add('hidden')" class="flex-1 py-2 border rounded-xl text-xs text-slate-500 hover:bg-slate-100">Batal</button>
+        <button onclick="saveAvatar(${id ? id : 'null'})" class="flex-1 py-2 bg-violet-600 text-white rounded-xl text-xs font-semibold">Simpan</button>
+      </div>
+    </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.classList.add('hidden'); });
+}
+
+async function saveAvatar(id) {
+  const name = document.getElementById('avName').value.trim();
+  const price = parseInt(document.getElementById('avPrice').value) || 0;
+  const fileInput = document.getElementById('avImage');
+  const file = fileInput ? fileInput.files[0] : null;
+  let image_url = document.getElementById('avImageUrl').value;
+
+  if (!name) { toast('Nama wajib diisi', 'error'); return; }
+  if (!file && !image_url) { toast('Upload gambar atau isi URL', 'error'); return; }
+
+  // Upload file if selected
+  if (file) {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const uploadRes = await fetch('/api/upload-avatar', { method: 'POST', body: formData });
+    const uploadData = await uploadRes.json();
+    if (!uploadData.success) { toast(uploadData.error || 'Upload gagal', 'error'); return; }
+    image_url = uploadData.url;
+  }
+
+  try {
+    if (id) {
+      await api(`/api/avatars/${id}`, { method: 'PUT', body: { name, price, image_url } });
+    } else {
+      await api('/api/avatars', { method: 'POST', body: { name, price, image_url } });
+    }
+    toast('✅ Avatar disimpan!');
+    document.getElementById('avatarModal').classList.add('hidden');
+    loadAvatarsAdmin();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteAvatar(id) {
+  if (!confirm('Hapus avatar ini? Avatar yang sudah dibeli user juga akan terhapus.')) return;
+  try { await api(`/api/avatars/${id}`, { method: 'DELETE' }); toast('Avatar dihapus'); loadAvatarsAdmin(); } catch(e) { toast(e.message, 'error'); }
 }
 
 async function loadConversation(ticketId) {
